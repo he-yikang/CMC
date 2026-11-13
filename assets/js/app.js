@@ -286,7 +286,7 @@
     return `<div class="card" id="${tableId}" style="padding:6px 14px">
       <table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题型</th><th>题干摘要</th><th>考点</th><th>题目页</th><th>解答页</th></tr></thead>
       <tbody>${qs.map(q => `<tr>
-        <td><a href="#/paper/${pad2(q.paperId)}?q=${q.id}" class="mono">${q.id}</a></td>
+        <td><a href="#/paper/${pad2(q.paperId)}?q=${q.id}" class="mono">${q.id}</a>${q.subLabel ? ` <span class="tl-sub">${esc(q.subLabel)}</span>` : ''}</td>
         <td>${q.year} ${esc(P[pad2(q.paperId)].short)}</td>
         <td><span class="badge type">${q.type}</span></td>
         <td style="max-width:340px">${esc(q.excerpt.slice(0, 62))}</td>
@@ -341,7 +341,7 @@
     const modCounts = modules.map(m => ({
       label: m.name, value: points.filter(p => p.moduleId === m.id).reduce((a, p) => a + cnt(p.id), 0), color: m.color
     })).sort((a, b) => b.value - a.value);
-    const hot = D.topics.filter(t => !PT[t.id].moduleId.startsWith('M9'))
+    const hot = D.topics.filter(t => !(MOD[PT[t.id].moduleId] || {}).extra)
       .slice().sort((a, b) => b.count - a.count).slice(0, 10)
       .map(t => ({ label: `${PT[t.id].short}（${t.id}）`, value: t.count, href: `#/topic/${t.id}`, color: PT[t.id].color }));
     const recent = papers.slice(-4).reverse();
@@ -353,6 +353,7 @@
         <p>第一至第十七届非数学类初赛、补赛与决赛：${meta.paperCount} 套试卷、${meta.questionCount} 道大题，
            按「卷序.题号」双向索引题目与参考解答；并以《CMC 非数 A 高数考纲》的
            ${meta.officialModuleCount} 个模块 / ${meta.officialPointCount} 个考点为骨架，把每道题挂到知识点上，
+           单列「线性代数」考纲外模块（${meta.linalgQuestionCount} 道决赛真题），
            再配 ${meta.cardCount} 张公式 / 定理 / 性质 / 解题方法卡片，与真题逐题对应。</p>
         <div class="actions">
           <a class="btn primary" href="#/papers">浏览历届真题 →</a>
@@ -473,6 +474,8 @@
             <div class="q-item" data-q="${q.id}">
               <div class="qi-top">
                 <span class="qi-num">${q.id}</span>
+                ${q.subLabel ? `<span class="tl-sub">${esc(q.subLabel)}</span>` : ''}
+                ${q.linalg ? '<span class="badge" style="color:#e9a8ff;border-color:rgba(217,70,239,.4);background:rgba(217,70,239,.1)">线性代数</span>' : ''}
                 <span class="badge type">${q.type}</span>
                 ${q.points ? `<span class="badge">${q.points} 分</span>` : ''}
                 <span class="qi-pages">P${q.questionPage} → P${q.solutionPage}</span>
@@ -528,12 +531,12 @@
   let mapState = { layout: 'galaxy', module: '全部', labels: false,
                    selected: null, cardType: '全部', cardQ: '' };
   function buildLayout() {
-    const W = 1000, H = 720, cx = 500, cy = 360;
+    const W = 1000, H = 740, cx = 500, cy = 370;
     const mods = modules;
     mods.forEach((m, i) => {
       const a = -Math.PI / 2 + i * 2 * Math.PI / mods.length;
-      m._x = cx + 330 * Math.cos(a);
-      m._y = cy + 218 * Math.sin(a);
+      m._x = cx + 352 * Math.cos(a);
+      m._y = cy + 238 * Math.sin(a);
     });
     const nodes = [];
     mods.forEach(m => {
@@ -575,13 +578,13 @@
     const years = [...new Set(qs.map(q => q.year))].sort((a, b) => a - b);
     const byYear = years.map(y => ({ label: String(y).slice(2), value: qs.filter(q => q.year === y).length }));
     return `<div class="card tight">
-        <div class="eyebrow" style="margin-bottom:6px">${p.moduleId} · 知识点 ${pad2(p.index)}</div>
+        <div class="eyebrow" style="margin-bottom:6px">当前选中 · ${p.moduleId} · 知识点 ${pad2(p.index)}</div>
         <h2 style="margin:0 0 10px;font-size:16px">${esc(p.short)}</h2>
         <p class="small" style="color:var(--txt2);line-height:1.75;margin:0 0 12px">${esc(p.text)}</p>
         <div class="chips" style="margin-bottom:12px">
           <span class="chip count">关联 ${t.count} 道题</span>
           <span class="chip">覆盖 ${years.length} 个年份</span>
-          <a class="chip" href="#/topic/${id}">详情 →</a>
+          <a class="chip" href="#/topic/${id}">完整详情 →</a>
         </div>
         <div class="small muted" style="margin-bottom:6px">年度分布</div>
         ${columns(byYear.slice(-12))}
@@ -591,21 +594,27 @@
         <div class="chips">${(p.cardIds || []).slice(0, 12).map(c => cardChip(c)).join('') || '<span class="small muted">暂无卡片</span>'}</div>
       </div>
       <div class="card tight">
-        <div class="card-head"><h3>关联试题</h3><span class="hint">${qs.length} 道</span></div>
+        <div class="card-head"><h3>该考点对应考题</h3><span class="hint">${qs.length} 道 · 点击左侧节点切换</span></div>
         <div class="stack" style="gap:6px">${qs.slice(0, 40).map(q => `
-          <a class="topic-link" href="#/paper/${pad2(q.paperId)}?q=${q.id}">
-            <span class="tl-id">${q.id}</span>
-            <span class="tl-ex">${esc(q.excerpt.slice(0, 34))}</span>
-            <span class="tl-pg">P${q.questionPage}</span>
-          </a>`).join('') || '<div class="small muted">暂无关联试题</div>'}</div>
+          <div class="topic-link">
+            <span class="tl-id">${q.id}${q.subLabel ? `<i class="tl-sub">${esc(q.subLabel)}</i>` : ''}</span>
+            <span class="tl-ex">${esc(q.excerpt.slice(0, 26))}</span>
+            <button class="btn sm" data-sq="${q.id}" data-sm="question" title="打开题目页">题</button>
+            <button class="btn sm" data-sq="${q.id}" data-sm="solution" title="打开解答页">解</button>
+          </div>`).join('') || '<div class="small muted">暂无关联试题</div>'}</div>
       </div>`;
   }
 
   function viewMap(params) {
     if (params && params.get('tab') === 'cards') mapState.layout = 'cards';
     if (params && params.get('type')) mapState.cardType = params.get('type');
-    if (params && !params.get('tab') && mapState.layout === 'cards') mapState.layout = 'galaxy';
-    setNav(mapState.layout === 'cards' ? 'cards' : 'map');
+    if (params && params.get('module')) mapState.module = params.get('module');
+    if (params && !params.get('tab') && !params.get('module') && !params.get('type')) {
+      mapState.layout = 'galaxy';        // 侧栏「知识地图」回到全景
+      mapState.module = '全部';
+    }
+    setNav(mapState.layout === 'cards' ? 'cards'
+      : (mapState.module === 'M10' ? 'linalg' : 'map'));
     crumb(mapState.layout === 'cards'
       ? [{ t: '知识地图', h: '#/map' }, { t: '知识卡片' }]
       : [{ t: '知识地图' }]);
@@ -616,8 +625,9 @@
       <div class="page-head"><div class="eyebrow">Knowledge Graph · Syllabus ↔ Questions ↔ Cards</div>
         <h1>考纲知识地图</h1>
         <p>以《CMC 非数 A 高数考纲》为骨架：${meta.officialModuleCount} 个模块 / ${meta.officialPointCount} 个考点，
-           另有 ${modules.length - meta.officialModuleCount} 个补充专题；并配 ${meta.cardCount} 张
-           <b style="color:var(--txt2)">公式 / 定理 / 性质 / 解题方法</b>卡片，每张卡片都关联到具体真题。</p></div>
+           另有「补充专题」（跨章节方法）与「线性代数」（考纲外·${meta.linalgQuestionCount} 道决赛真题）两个独立模块；
+           并配 ${meta.cardCount} 张 <b style="color:var(--txt2)">公式 / 定理 / 性质 / 解题方法</b>卡片。
+           <b style="color:var(--acc)">点击任意节点，右侧栏即刻切换为该考点的考纲原文、相关卡片与对应考题。</b></p></div>
       <div class="map-toolbar">
         <div class="filter-group" id="mapLayout">${[['galaxy', '星系图'], ['tree', '树状图'], ['heat', '热力图'], ['cards', '知识卡片']].map(([k, v]) => `<button data-v="${k}" class="${mapState.layout === k ? 'on' : ''}">${v}</button>`).join('')}</div>
         <select id="mapModule"><option value="全部">全部模块</option>${modules.map(m => `<option value="${m.id}" ${mapState.module === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
@@ -629,10 +639,22 @@
         <div class="map-side" id="mapSide"></div>
       </div>`;
 
+    // 侧栏题目按钮：直接在抽屉里打开 PDF，不离开知识地图
+    $('#mapSide').addEventListener('click', e => {
+      const b = e.target.closest('[data-sq]'); if (!b) return;
+      openQuestion(Q[b.dataset.sq], b.dataset.sm);
+    });
+
     const renderSide = () => { $('#mapSide').innerHTML = mapSide(mapState.selected); };
     const renderMain = () => {
       const box = $('#mapMain');
       const isCards = mapState.layout === 'cards';
+      // 模块筛选后，侧栏自动切到该模块的第一个考点，避免显示上一个模块的考题
+      if (mapState.module !== '全部' &&
+          (!PT[mapState.selected] || PT[mapState.selected].moduleId !== mapState.module)) {
+        const first = points.find(p => p.moduleId === mapState.module);
+        if (first) mapState.selected = first.id;
+      }
       $('#mapLayoutRoot').classList.toggle('wide', isCards);
       $('#mapLabelsWrap').style.display = isCards ? 'none' : '';
       if (isCards) { box.innerHTML = cardsHTML(); initCards(); }
@@ -707,8 +729,9 @@
     const visM = mapState.module === '全部' ? L.mods : L.mods.filter(m => m.id === mapState.module);
     const visP = L.nodes.filter(p => mapState.module === '全部' || p.moduleId === mapState.module);
     const edges = visP.map(p => `<path class="edge" d="M${p._hx.toFixed(1)},${p._hy.toFixed(1)} L${p._x.toFixed(1)},${p._y.toFixed(1)}" stroke="${p.color}" stroke-opacity=".22"/>`).join('');
-    const spokes = visM.map(m => `<line x1="${L.W / 2}" y1="${L.H / 2}" x2="${m._x}" y2="${m._y}"
-        stroke="rgba(139,123,255,.12)" stroke-dasharray="3 7"/>`).join('');
+    const all = mapState.module === '全部';
+    const spokes = all ? visM.map(m => `<line x1="${L.W / 2}" y1="${L.H / 2}" x2="${m._x}" y2="${m._y}"
+        stroke="rgba(139,123,255,.12)" stroke-dasharray="3 7"/>`).join('') : '';
     const hubs = visM.map(m => {
       const c = points.filter(p => p.moduleId === m.id).reduce((a, p) => a + cnt(p.id), 0);
       return `<g>
@@ -739,7 +762,7 @@
         </defs>
         <g id="mapRoot">
           <g>${spokes}</g>
-          <g>
+          ${all ? `<g>
             <circle cx="${L.W / 2}" cy="${L.H / 2}" r="72" fill="url(#coreGrad)" stroke="rgba(139,123,255,.35)"/>
             <circle cx="${L.W / 2}" cy="${L.H / 2}" r="50" fill="rgba(139,123,255,.09)" stroke="rgba(139,123,255,.3)"/>
             <text x="${L.W / 2}" y="${L.H / 2 - 5}" text-anchor="middle" font-size="19"
@@ -747,8 +770,8 @@
             <text x="${L.W / 2}" y="${L.H / 2 + 15}" text-anchor="middle" font-size="10.5"
                   fill="#8b93b8" style="pointer-events:none">考纲知识地图</text>
             <text x="${L.W / 2}" y="${L.H / 2 + 31}" text-anchor="middle" font-size="9.5"
-                  font-family="var(--mono)" fill="#666e90" style="pointer-events:none">8 模块 · 62 考点 · 272 题</text>
-          </g>
+                  font-family="var(--mono)" fill="#666e90" style="pointer-events:none">${meta.officialModuleCount} 模块 · ${meta.officialPointCount} 考点 · ${meta.questionCount} 题</text>
+          </g>` : ''}
           <g>${edges}</g><g>${hubs}</g><g>${nodes}</g>
         </g>
       </svg>
@@ -760,34 +783,74 @@
   function initGalaxy(onSelect) {
     const svg = $('#mapSvg'); if (!svg) return;
     const root = $('#mapRoot');
+    const VB_W = 1000, VB_H = 740;
     let tx = 0, ty = 0, sc = 1, dragging = false, lx = 0, ly = 0;
+    let downX = 0, downY = 0, downNode = null, moved = false;
     const apply = () => root.setAttribute('transform', `translate(${tx},${ty}) scale(${sc})`);
+    // 用坐标反查节点，避免指针捕获 / 透明覆盖层导致 e.target 不是节点本身
+    const nodeAt = e => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      return el && el.closest ? el.closest('[data-href]') : null;
+    };
+    const select = t => {
+      if (!t) return;
+      mapState.selected = t.dataset.href.split('/').pop();
+      $$('#mapSvg [data-href]').forEach(g => g.classList.toggle('sel', g === t));
+      if (onSelect) onSelect();                 // 原地刷新右侧栏，不跳转页面
+    };
     svg.addEventListener('wheel', e => {
       e.preventDefault();
       const r = svg.getBoundingClientRect();
-      const mx = (e.clientX - r.left) / r.width * 1000;
-      const my = (e.clientY - r.top) / r.height * 720;
+      const mx = (e.clientX - r.left) / r.width * VB_W;
+      const my = (e.clientY - r.top) / r.height * VB_H;
       const old = sc; sc = Math.min(2.6, Math.max(.55, sc * (e.deltaY > 0 ? .9 : 1.11)));
       tx = mx - (mx - tx) * (sc / old); ty = my - (my - ty) * (sc / old); apply();
     }, { passive: false });
-    svg.addEventListener('pointerdown', e => { dragging = true; lx = e.clientX; ly = e.clientY; svg.classList.add('dragging'); svg.setPointerCapture(e.pointerId); });
+    svg.addEventListener('pointerdown', e => {
+      dragging = true; moved = false;
+      lx = downX = e.clientX; ly = downY = e.clientY;
+      downNode = (e.target.closest ? e.target.closest('[data-href]') : null) || nodeAt(e);
+      svg.classList.add('dragging');
+      // 注意：这里不要 setPointerCapture，否则 click 的 target 会变成 svg 本身
+    });
     svg.addEventListener('pointermove', e => {
-      if (dragging) { const r = svg.getBoundingClientRect(); tx += (e.clientX - lx) * 1000 / r.width; ty += (e.clientY - ly) * 720 / r.height; lx = e.clientX; ly = e.clientY; apply(); }
-      const t = e.target.closest('[data-tip]');
+      if (dragging) {
+        if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 5) moved = true;
+        if (moved) {
+          const r = svg.getBoundingClientRect();
+          tx += (e.clientX - lx) * VB_W / r.width; ty += (e.clientY - ly) * VB_H / r.height;
+          apply();
+        }
+        lx = e.clientX; ly = e.clientY;
+      }
+      const t = nodeAt(e) || (e.target.closest ? e.target.closest('[data-tip]') : null);
       const tip = $('#tooltip');
-      if (t) {
+      if (t && t.dataset.tip) {
         const [id, name, c] = t.dataset.tip.split('|');
-        tip.innerHTML = `<b>${esc(name)}</b><span class="tsub">${esc(id)} · 关联 ${esc(c)} 道题</span><div style="margin-top:4px;color:var(--txt2)">点击查看考纲条目与试题</div>`;
+        tip.innerHTML = `<b>${esc(name)}</b><span class="tsub">${esc(id)} · 关联 ${esc(c)} 道题</span><div style="margin-top:4px;color:var(--txt2)">点击右侧栏查看考纲条目与试题</div>`;
         tip.hidden = false; tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
       } else tip.hidden = true;
     });
-    svg.addEventListener('pointerup', e => { dragging = false; svg.classList.remove('dragging'); });
-    svg.addEventListener('pointerleave', () => { dragging = false; $('#tooltip').hidden = true; });
-    svg.addEventListener('click', e => {
-      const t = e.target.closest('[data-href]'); if (!t || dragging) return;
-      mapState.selected = t.dataset.href.split('/').pop();
-      location.hash = t.dataset.href;
+    svg.addEventListener('pointerup', e => {
+      if (dragging && !moved) select(downNode || nodeAt(e));
+      dragging = false; svg.classList.remove('dragging');
+      $('#tooltip').hidden = true;
     });
+    svg.addEventListener('pointercancel', () => { dragging = false; svg.classList.remove('dragging'); });
+    svg.addEventListener('pointerleave', () => { dragging = false; $('#tooltip').hidden = true; });
+    // 兜底：键盘/合成 click 事件也能选中
+    svg.addEventListener('click', e => {
+      const t = (e.target.closest ? e.target.closest('[data-href]') : null) || nodeAt(e);
+      if (t) select(t);
+    });
+    $$('#mapSvg [data-href]').forEach(g =>
+      g.classList.toggle('sel', g.dataset.href === '#/topic/' + mapState.selected));
+    // 单模块筛选时把该模块的星团移到画布中央
+    if (mapState.module !== '全部' && MOD[mapState.module] && MOD[mapState.module]._x != null) {
+      tx = VB_W / 2 - MOD[mapState.module]._x;
+      ty = VB_H / 2 - MOD[mapState.module]._y;
+      apply();
+    }
   }
 
   function treeHTML() {
@@ -836,8 +899,10 @@
   function viewTopic(id) {
     const p = PT[id], t = TP[id];
     if (!p) { $view.innerHTML = '<div class="empty">未找到该知识点</div>'; return; }
-    setNav('map'); mapState.selected = id;
-    crumb([{ t: '知识地图', h: '#/map' }, { t: p.moduleName, h: '#/map' }, { t: `${id} ${p.short}` }]);
+    const mod = MOD[p.moduleId] || {};
+    const isLA = p.moduleId === 'M10';
+    setNav(isLA ? 'linalg' : 'map'); mapState.selected = id;
+    crumb([{ t: '知识地图', h: '#/map' }, { t: p.moduleName, h: isLA ? '#/map?module=M10' : '#/map' }, { t: `${id} ${p.short}` }]);
     const qs = Qof(id);
     const years = [...new Set(qs.map(q => q.year))].sort((a, b) => a - b);
     const byStage = ['初赛', '补赛', '决赛'].map(s => ({ label: s, value: qs.filter(q => q.stage === s).length, color: s === '决赛' ? '#ff7a59' : '#8b7bff' }));
@@ -845,9 +910,13 @@
     const kw = p.keywords.map(k => `<span class="chip">${esc(k.kw)} <span class="mono muted">×${k.w}</span></span>`).join('');
     $view.innerHTML = `
       <div class="page-head">
-        <div class="eyebrow">${esc(p.moduleName)} · ${id} · 考纲第 ${pad2(p.index)} 条</div>
+        <div class="eyebrow">${esc(p.moduleName)} · ${id} · ${isLA ? '考纲外 · 决赛真题归纳' : `考纲第 ${pad2(p.index)} 条`}</div>
         <h1>${esc(p.short)}</h1>
         <p>${esc(p.text)}</p>
+        ${isLA ? `<div class="card tight syl-note" style="--c:${p.color};margin-top:12px">
+          本考点不属于《CMC 非数 A 类高数考纲》，而是依据用户逐届核对的决赛真题清单单独归纳，
+          共 ${meta.linalgQuestionCount} 道线性代数题；题目表中的 <span class="tl-sub">一(4)</span> 等标记表示
+          「填空题第 4 小题」，其余为整道大题。</div>` : ''}
       </div>
       <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
         <div class="stat-card" style="--c:${p.color}"><div class="lab">关联试题</div><div class="val">${t.count}</div><div class="sub">占全部 ${(t.count / questions.length * 100).toFixed(1)}%</div></div>
@@ -863,22 +932,8 @@
       <div class="section-title">相关公式 / 定理 / 性质 / 方法 <span class="n">${(p.cardIds || []).length} 张卡片 · 均可跳到真题</span></div>
       <div class="card"><div class="card-wall compact">${(p.cardIds || []).map(id => cardTile(C[id])).join('') || '<div class="small muted">暂无卡片</div>'}</div></div>
       <div class="section-title">关联试题 <span class="n">${qs.length} 道 · 点击直接跳转到 PDF 原页</span></div>
-      <div class="card" id="topicTable" style="padding:6px 14px">
-        <table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题型</th><th>题干摘要</th><th>考点</th><th>题目页</th><th>解答页</th></tr></thead>
-        <tbody>${qs.map(q => `<tr>
-          <td><a href="#/paper/${pad2(q.paperId)}?q=${q.id}" class="mono">${q.id}</a></td>
-          <td>${q.year} ${esc(P[pad2(q.paperId)].short)}</td>
-          <td><span class="badge type">${q.type}</span></td>
-          <td style="max-width:340px">${esc(q.excerpt.slice(0, 62))}</td>
-          <td>${topicChips(q, 2)}</td>
-          <td><button class="btn sm" data-openq="${q.id}" data-m="question">P${q.questionPage}</button></td>
-          <td><button class="btn sm" data-openq="${q.id}" data-m="solution">P${q.solutionPage}</button></td>
-        </tr>`).join('')}</tbody></table>
-      </div>`;
-    $('#topicTable').addEventListener('click', e => {
-      const b = e.target.closest('[data-openq]'); if (!b) return;
-      openQuestion(Q[b.dataset.openq], b.dataset.m);
-    });
+      ${questionRows(qs, 'topicTable', 'data-openq')}`;
+    bindQuestionRows('topicTable', 'data-openq');
   }
 
   /* ----------------------------- 视图：知识卡片详情 ----------------------------- */
@@ -944,17 +999,20 @@
     $view.innerHTML = `
       <div class="page-head"><div class="eyebrow">Syllabus · CMC 非数 A 类</div>
         <h1>${esc(syl.title)}</h1>
-        <p>逐条转录自 <span class="mono">${esc(syl.source)}</span>：${meta.officialModuleCount} 个模块 / ${meta.officialPointCount} 个考点，
-           另设补充专题收纳考纲未单列的高频方法与真超纲试题。每个条目后的数字为自动关联到的试题数。</p></div>
+        <p>逐条转录自 <span class="mono">${esc(syl.source)}</span>：${meta.officialModuleCount} 个模块 / ${meta.officialPointCount} 个考点；
+           另设「补充专题」（跨章节方法）与「线性代数」（考纲外·历届决赛真题归纳）两个独立模块。
+           每个条目后的数字为关联到的试题数。</p></div>
       <div id="sylWrap">${modules.map(m => {
         const c = points.filter(p => p.moduleId === m.id).reduce((a, p) => a + cnt(p.id), 0);
         return `<div class="card syl-module ${sylClosed[m.id] ? 'closed' : ''}" data-mid="${m.id}" style="padding:0">
           <div class="syl-head" data-toggle="${m.id}">
             <span class="idx" style="--c:${m.color};background:${m.color}">${m.id.replace('M', '')}</span>
-            <h2>${esc(m.name)} ${m.extra ? '<span class="badge" style="margin-left:6px">补充</span>' : ''}</h2>
+            <h2>${esc(m.name)} ${m.tag ? `<span class="badge" style="margin-left:6px;color:${m.color};border-color:${m.color}55">${esc(m.tag)}</span>` : ''}</h2>
             <span class="meta">${m.count} 条目 · ${c} 题次</span><span class="chev">⌄</span>
           </div>
-          <div class="syl-body">${points.filter(p => p.moduleId === m.id).map(p => `
+          <div class="syl-body">
+            ${m.note ? `<div class="syl-note" style="--c:${m.color}">${esc(m.note)}</div>` : ''}
+            ${points.filter(p => p.moduleId === m.id).map(p => `
             <div class="syl-item">
               <span class="n">${pad2(p.index)}</span>
               <span class="tx">${esc(p.text)}</span>

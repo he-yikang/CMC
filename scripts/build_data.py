@@ -74,15 +74,43 @@ GENERIC = {
     "求极限", "求导",
 }
 
-# 明确超出《非数学类 A 类·高等数学》考纲范围的试题（线性代数 / 纯不等式技巧）。
-# 保留在站点里，归入「考纲外·补充专题」，避免强行塞进某个高数考点。
+# 少量人工校正：超纲不等式题 / 关键词匹配失效的积分题。
 OVERRIDES = {
-    "29.3": ["M9-01"],
-    "39.5": ["M9-01"],
-    "36.6": ["M9-02"],
+    "36.6": ["M9-01"],
     "06.2": ["M3-03", "M3-04"],
-    "15.4": ["M3-03", "M9-02"],
+    "15.4": ["M3-03", "M9-01"],
 }
+
+# ---------------------------------------------------------------------------
+# 线性代数（M10）：考纲外的独立模块。
+# 由用户逐届核对的决赛真题清单，是权威依据，故不做关键词自动标注。
+# sub 表示该大题中真正属于线性代数的小题（填空题「一」含多个小题）。
+# ---------------------------------------------------------------------------
+LINALG = {
+    "28.1": {"sub": "一(4)", "points": ["M10-01", "M10-02"]},
+    "28.6": {"sub": "六",   "points": ["M10-05"]},
+    "29.1": {"sub": "一(3)", "points": ["M10-01"]},
+    "29.3": {"sub": "三",   "points": ["M10-04"]},
+    "30.1": {"sub": "一(4)", "points": ["M10-04", "M10-03"]},
+    "30.4": {"sub": "四",   "points": ["M10-02"]},
+    "31.1": {"sub": "一(3)", "points": ["M10-02"]},
+    "31.5": {"sub": "五",   "points": ["M10-03"]},
+    "32.1": {"sub": "一(5)", "points": ["M10-03"]},
+    "33.1": {"sub": "一(5)", "points": ["M10-05"]},
+    "33.6": {"sub": "六",   "points": ["M10-04", "M10-02"]},
+    "34.5": {"sub": "五",   "points": ["M10-05", "M10-03"]},
+    "35.1": {"sub": "一(4)", "points": ["M10-01"]},
+    "35.5": {"sub": "五",   "points": ["M10-05", "M10-04"]},
+    "36.7": {"sub": "七",   "points": ["M10-02"]},
+    "37.2": {"sub": "二",   "points": ["M10-06"]},
+    "38.5": {"sub": "五",   "points": ["M10-04"]},
+    "39.5": {"sub": "五",   "points": ["M10-05"]},
+    "40.6": {"sub": "六",   "points": ["M10-05"]},
+    "41.5": {"sub": "五",   "points": ["M10-06"]},
+    "42.6": {"sub": "六",   "points": ["M10-06"]},
+}
+# M10 完全由上面的清单驱动，禁止自动打标签，避免把非线代题误挂进来。
+NO_AUTO_MODULES = {"M10"}
 
 
 def is_noise(line):
@@ -309,7 +337,8 @@ def build_syllabus():
     for mod in src["modules"]:
         modules.append({"id": mod["id"], "name": mod["name"],
                         "color": mod["color"], "count": len(mod["items"]),
-                        "extra": bool(mod.get("extra", False))})
+                        "extra": bool(mod.get("extra", False)),
+                        "tag": mod.get("tag", ""), "note": mod.get("note", "")})
         for i, item in enumerate(mod["items"], 1):
             kws, seen = [], set()
             for kw, w in item["kw"]:
@@ -340,6 +369,8 @@ def tag_questions(questions, syllabus):
         text = " ".join([q["heading"], q["stem"], q["solution"][:350]])
         scores, hits = {}, {}
         for kp in kps:
+            if kp["moduleId"] in NO_AUTO_MODULES:   # 由 LINALG 清单显式驱动
+                continue
             s, h = 0, []
             for item in kp["keywords"]:
                 c = text.count(item["kw"])
@@ -364,6 +395,20 @@ def tag_questions(questions, syllabus):
         top = ranked[0][1] if ranked else 0
         q["confidence"] = ("manual" if override else
                            "high" if top >= 6 else ("mid" if top >= 3 else "low"))
+        q["subLabel"] = ""
+
+        # 线性代数模块：完全按用户核对的决赛真题清单标注，优先级最高
+        la = LINALG.get(q["id"])
+        if la:
+            # 填空题「一(4)」这类大题还含其它高数小题，保留 1 个次级考点；
+            # 整道大题都是线代的（六、五、二等）只挂 M10，避免误挂无关考点。
+            auto = ([t for t in q["topics"] if not t.startswith("M10-")][:1]
+                    if "(" in la["sub"] else [])
+            q["topics"] = la["points"] + auto
+            q["topicHits"] = {t: ["用户指定·决赛线性代数清单"] for t in la["points"]}
+            q["confidence"] = "manual"
+            q["subLabel"] = la["sub"]
+            q["linalg"] = True
 
     # 统计
     by_kp = defaultdict(list)
@@ -506,6 +551,7 @@ def main():
     for t in topics:
         t["cardIds"] = [c["id"] for c in cards if t["id"] in c["pointIds"]]
 
+    extra_mods = {m["id"] for m in syllabus["modules"] if m["extra"]}
     meta = {
         "paperCount": len(papers),
         "questionCount": len(questions),
@@ -513,7 +559,8 @@ def main():
         "officialModuleCount": sum(1 for m in syllabus["modules"] if not m["extra"]),
         "pointCount": len(syllabus["points"]),
         "officialPointCount": sum(1 for p in syllabus["points"]
-                                  if not p["moduleId"] == "M9"),
+                                  if p["moduleId"] not in extra_mods),
+        "linalgQuestionCount": sum(1 for q in questions if q.get("linalg")),
         "cardCount": len(cards),
         "cardTypeCounts": dict(Counter(c["type"] for c in cards)),
         "editionCount": len({p["edition"] for p in papers}),
