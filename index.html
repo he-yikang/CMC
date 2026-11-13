@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="全国大学生数学竞赛（非数学类）历届真题与详解可视化：42 套试卷、272 道大题、考纲知识地图与试题对应。">
+<title>CMC · 历届真题与知识地图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="bg-glow a" aria-hidden="true"></div>
+<div class="bg-glow b" aria-hidden="true"></div>
+
+<aside class="sidebar" id="sidebar">
+  <a class="brand" href="#/">
+    <span class="brand-mark">∑</span>
+    <span class="brand-txt"><b>CMC</b><small>真题 · 知识地图</small></span>
+  </a>
+  <nav class="nav" id="nav">
+    <div class="nav-label">探索</div>
+    <a class="nav-item" data-route="home"    href="#/"><span class="ni">◈</span>总览</a>
+    <a class="nav-item" data-route="papers"  href="#/papers"><span class="ni">▤</span>历届真题</a>
+    <a class="nav-item" data-route="map"     href="#/map"><span class="ni">✦</span>知识地图</a>
+    <a class="nav-item" data-route="stats"   href="#/stats"><span class="ni">▥</span>统计分析</a>
+    <a class="nav-item" data-route="syllabus" href="#/syllabus"><span class="ni">☰</span>考纲全文</a>
+    <div class="nav-label">数据</div>
+    <a class="nav-item" href="assets/cmc-papers.pdf" target="_blank" rel="noopener"><span class="ni">⇱</span>PDF 原件</a>
+    <a class="nav-item" href="https://github.com/he-yikang/CMC" target="_blank" rel="noopener"><span class="ni">⌘</span>GitHub 仓库</a>
+  </nav>
+  <div class="side-foot">
+    <div class="mini-stat"><span>试卷</span><b id="sfPapers">—</b></div>
+    <div class="mini-stat"><span>大题</span><b id="sfQuestions">—</b></div>
+    <div class="mini-stat"><span>考点</span><b id="sfPoints">—</b></div>
+    <p class="side-note">第一至第十七届 · 非数学类<br>题目与解答双向索引</p>
+  </div>
+</aside>
+
+<button class="menu-toggle" id="menuToggle" aria-label="菜单">☰</button>
+
+<div class="workspace" id="workspace">
+  <header class="topbar">
+    <div class="crumb" id="crumb">总览</div>
+    <div class="top-actions">
+      <div class="searchbox">
+        <span class="s-icon">⌕</span>
+        <input id="globalSearch" type="search" placeholder="搜索试题、试卷、考点…" autocomplete="off">
+        <kbd>/</kbd>
+      </div>
+      <button class="btn ghost" id="openReader" title="打开 PDF 阅读器">PDF 阅读器</button>
+    </div>
+  </header>
+  <main id="view" class="view"></main>
+  <footer class="foot">
+    <span>数据源：《全国大学生数学竞赛历届真题与详解》·《CMC 非数 A 高数考纲》</span>
+    <span>考点标注为关键词规则自动匹配，部分题目人工校正 · 公式以 PDF 原件为准</span>
+  </footer>
+</div>
+
+<!-- 全局 PDF 阅读器抽屉 -->
+<div class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-mask" data-close></div>
+  <section class="drawer-panel">
+    <div class="drawer-head">
+      <div>
+        <div class="drawer-title" id="drawerTitle">PDF 阅读器</div>
+        <div class="drawer-sub" id="drawerSub">加载中…</div>
+      </div>
+      <button class="icon-btn" data-close title="关闭">✕</button>
+    </div>
+    <div class="pdf-toolbar" id="drawerToolbar"></div>
+    <div class="pdf-stage" id="drawerStage"><canvas id="drawerCanvas"></canvas></div>
+  </section>
+</div>
+
+<div class="tooltip" id="tooltip" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="assets/js/pdf.min.js"></script>
+<script src="assets/data/bundle.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
