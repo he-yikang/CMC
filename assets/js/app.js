@@ -15,13 +15,18 @@
   const meta     = D.meta;
   const points   = syl.points;
   const modules  = syl.modules;
+  const cards    = D.cards || [];
+  const cardTypes= D.cardTypes || [];
 
   const P    = Object.fromEntries(papers.map(p => [String(p.id).padStart(2, '0'), p]));
   const Q    = Object.fromEntries(questions.map(q => [q.id, q]));
   const PT   = Object.fromEntries(points.map(p => [p.id, p]));
   const TP   = Object.fromEntries(D.topics.map(t => [t.id, t]));
   const MOD  = Object.fromEntries(modules.map(m => [m.id, m]));
+  const C    = Object.fromEntries(cards.map(c => [c.id, c]));
+  const CT   = Object.fromEntries(cardTypes.map(t => [t.id, t]));
   const Qof  = id => (TP[id] ? TP[id].questions.map(x => Q[x]).filter(Boolean) : []);
+  const QofC = id => (C[id] ? C[id].questionIds.map(x => Q[x]).filter(Boolean) : []);
   const cnt  = id => (TP[id] ? TP[id].count : 0);
 
   const $  = (s, r = document) => r.querySelector(s);
@@ -242,6 +247,62 @@
     }
   }
 
+  /* ----------------------------- 知识卡片组件 ----------------------------- */
+  function mathHTML(latex, extraClass = '') {
+    if (!latex) return '';
+    let inner;
+    try {
+      if (!window.katex) throw new Error('katex missing');
+      inner = window.katex.renderToString(latex,
+        { throwOnError: false, strict: false, displayMode: false, trust: false });
+    } catch (e) {
+      inner = `<code>${esc(latex)}</code>`;
+    }
+    return `<div class="kc-math ${extraClass}">${inner}</div>`;
+  }
+  function cardChip(id, withCount = false) {
+    const c = C[id]; if (!c) return '';
+    return `<a class="chip kchip" href="#/card/${id}" title="${esc(c.typeName)} · ${esc(c.title)}">
+      <i class="dot" style="background:${c.typeColor}"></i>${esc(c.title)}${withCount ? ` <span class="mono muted">${c.count}</span>` : ''}</a>`;
+  }
+  function cardTile(c) {
+    return `<a class="kcard" href="#/card/${c.id}" style="--kc:${c.typeColor}">
+      <div class="kc-top">
+        <span class="kc-badge">${esc(c.typeShort)}</span>
+        <span class="kc-id">${c.id}</span>
+        <span class="kc-mod" style="color:${c.moduleColor}">${esc(c.moduleName)}</span>
+      </div>
+      <h3>${esc(c.title)}</h3>
+      ${mathHTML(c.latex)}
+      <p class="kc-body">${esc(c.body.slice(0, 78))}${c.body.length > 78 ? '…' : ''}</p>
+      <div class="kc-foot">
+        <span class="chip count">关联 ${c.count} 道题</span>
+        <span class="kc-pts">${c.pointIds.length} 个考点</span>
+        <span class="kc-go">详情 →</span>
+      </div>
+    </a>`;
+  }
+  function questionRows(qs, tableId, attr) {
+    return `<div class="card" id="${tableId}" style="padding:6px 14px">
+      <table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题型</th><th>题干摘要</th><th>考点</th><th>题目页</th><th>解答页</th></tr></thead>
+      <tbody>${qs.map(q => `<tr>
+        <td><a href="#/paper/${pad2(q.paperId)}?q=${q.id}" class="mono">${q.id}</a></td>
+        <td>${q.year} ${esc(P[pad2(q.paperId)].short)}</td>
+        <td><span class="badge type">${q.type}</span></td>
+        <td style="max-width:340px">${esc(q.excerpt.slice(0, 62))}</td>
+        <td>${topicChips(q, 2)}</td>
+        <td><button class="btn sm" ${attr}="${q.id}" data-m="question">P${q.questionPage}</button></td>
+        <td><button class="btn sm" ${attr}="${q.id}" data-m="solution">P${q.solutionPage}</button></td>
+      </tr>`).join('')}</tbody></table></div>`;
+  }
+  function bindQuestionRows(tableId, attr) {
+    const t = $('#' + tableId);
+    if (t) t.addEventListener('click', e => {
+      const b = e.target.closest(`[${attr}]`); if (!b) return;
+      openQuestion(Q[b.getAttribute(attr)], b.dataset.m);
+    });
+  }
+
   /* ----------------------------- 公共片段 ----------------------------- */
   function topicChips(q, limit = 3) {
     return `<div class="chips">${q.topics.slice(0, limit).map(t => {
@@ -291,10 +352,12 @@
         <h1>全国大学生数学竞赛<br><em>历届真题 × 考纲知识地图</em></h1>
         <p>第一至第十七届非数学类初赛、补赛与决赛：${meta.paperCount} 套试卷、${meta.questionCount} 道大题，
            按「卷序.题号」双向索引题目与参考解答；并以《CMC 非数 A 高数考纲》的
-           ${meta.officialModuleCount} 个模块 / ${meta.officialPointCount} 个考点为骨架，把每道题挂到知识点上。</p>
+           ${meta.officialModuleCount} 个模块 / ${meta.officialPointCount} 个考点为骨架，把每道题挂到知识点上，
+           再配 ${meta.cardCount} 张公式 / 定理 / 性质 / 解题方法卡片，与真题逐题对应。</p>
         <div class="actions">
           <a class="btn primary" href="#/papers">浏览历届真题 →</a>
           <a class="btn" href="#/map">打开知识地图 ✦</a>
+          <a class="btn" href="#/map?tab=cards">知识卡片 ◇</a>
           <a class="btn" href="#/syllabus">查看考纲</a>
         </div>
       </div>
@@ -304,6 +367,16 @@
         <div class="stat-card" style="--c:#4d8dff"><div class="lab">大题 / QUESTIONS</div><div class="val">${meta.questionCount}</div><div class="sub">每题含题目页 + 解答页</div></div>
         <div class="stat-card" style="--c:#26c6da"><div class="lab">届次 / EDITIONS</div><div class="val">${meta.editionCount}</div><div class="sub">${meta.yearMin} – ${meta.yearMax}</div></div>
         <div class="stat-card" style="--c:#35d0a5"><div class="lab">考纲考点 / TOPICS</div><div class="val">${meta.officialPointCount}</div><div class="sub">${meta.officialModuleCount} 大模块 + 补充专题</div></div>
+      </div>
+      <div class="card tight" style="margin-bottom:20px">
+        <div class="card-head" style="margin-bottom:10px"><h3>知识卡片速览</h3>
+          <a class="hint" href="#/map?tab=cards">全部 ${meta.cardCount} 张 →</a></div>
+        <div class="kc-stat-row">${cardTypes.map(t => `
+          <a class="kc-stat" href="#/map?tab=cards&type=${t.id}" style="--kc:${t.color}">
+            <span class="kc-badge">${esc(t.short)}</span>
+            <b class="mono">${meta.cardTypeCounts[t.id] || 0}</b>
+            <span class="small muted">${esc(t.name)}</span>
+          </a>`).join('')}</div>
       </div>
 
       <div class="section-title">竞赛时间轴 <span class="n">点击年份查看该年试卷</span></div>
@@ -406,6 +479,7 @@
               </div>
               <div class="qi-excerpt" title="${esc(q.excerpt)}">${esc(q.excerpt)}</div>
               ${topicChips(q, 2)}
+              ${q.cardIds && q.cardIds.length ? `<div class="chips" style="margin-top:6px">${q.cardIds.slice(0, 2).map(c => cardChip(c)).join('')}</div>` : ''}
               <div class="qi-actions" style="margin-top:9px">
                 <button class="btn sm" data-open="${q.id}" data-mode="question">看题目</button>
                 <button class="btn sm" data-open="${q.id}" data-mode="solution">看解答</button>
@@ -451,7 +525,8 @@
   }
 
   /* ----------------------------- 视图：知识地图 ----------------------------- */
-  let mapState = { layout: 'galaxy', module: '全部', labels: false, selected: null };
+  let mapState = { layout: 'galaxy', module: '全部', labels: false,
+                   selected: null, cardType: '全部', cardQ: '' };
   function buildLayout() {
     const W = 1000, H = 720, cx = 500, cy = 360;
     const mods = modules;
@@ -512,6 +587,10 @@
         ${columns(byYear.slice(-12))}
       </div>
       <div class="card tight">
+        <div class="card-head"><h3>相关公式 / 定理 / 方法</h3><span class="hint">${(p.cardIds || []).length} 张</span></div>
+        <div class="chips">${(p.cardIds || []).slice(0, 12).map(c => cardChip(c)).join('') || '<span class="small muted">暂无卡片</span>'}</div>
+      </div>
+      <div class="card tight">
         <div class="card-head"><h3>关联试题</h3><span class="hint">${qs.length} 道</span></div>
         <div class="stack" style="gap:6px">${qs.slice(0, 40).map(q => `
           <a class="topic-link" href="#/paper/${pad2(q.paperId)}?q=${q.id}">
@@ -522,24 +601,30 @@
       </div>`;
   }
 
-  function viewMap() {
-    setNav('map'); crumb([{ t: '知识地图' }]);
+  function viewMap(params) {
+    if (params && params.get('tab') === 'cards') mapState.layout = 'cards';
+    if (params && params.get('type')) mapState.cardType = params.get('type');
+    if (params && !params.get('tab') && mapState.layout === 'cards') mapState.layout = 'galaxy';
+    setNav(mapState.layout === 'cards' ? 'cards' : 'map');
+    crumb(mapState.layout === 'cards'
+      ? [{ t: '知识地图', h: '#/map' }, { t: '知识卡片' }]
+      : [{ t: '知识地图' }]);
     if (!mapState.selected) {
       mapState.selected = D.topics.slice().sort((a, b) => b.count - a.count)[0].id;
     }
     $view.innerHTML = `
-      <div class="page-head"><div class="eyebrow">Knowledge Graph · Syllabus ↔ Questions</div>
+      <div class="page-head"><div class="eyebrow">Knowledge Graph · Syllabus ↔ Questions ↔ Cards</div>
         <h1>考纲知识地图</h1>
         <p>以《CMC 非数 A 高数考纲》为骨架：${meta.officialModuleCount} 个模块 / ${meta.officialPointCount} 个考点，
-           另有 ${modules.length - meta.officialModuleCount} 个补充专题收纳超纲与跨章节方法。
-           节点大小 = 关联试题数，点击节点查看考纲原文与全部关联试题。</p></div>
+           另有 ${modules.length - meta.officialModuleCount} 个补充专题；并配 ${meta.cardCount} 张
+           <b style="color:var(--txt2)">公式 / 定理 / 性质 / 解题方法</b>卡片，每张卡片都关联到具体真题。</p></div>
       <div class="map-toolbar">
-        <div class="filter-group" id="mapLayout">${[['galaxy', '星系图'], ['tree', '树状图'], ['heat', '热力图']].map(([k, v]) => `<button data-v="${k}" class="${mapState.layout === k ? 'on' : ''}">${v}</button>`).join('')}</div>
+        <div class="filter-group" id="mapLayout">${[['galaxy', '星系图'], ['tree', '树状图'], ['heat', '热力图'], ['cards', '知识卡片']].map(([k, v]) => `<button data-v="${k}" class="${mapState.layout === k ? 'on' : ''}">${v}</button>`).join('')}</div>
         <select id="mapModule"><option value="全部">全部模块</option>${modules.map(m => `<option value="${m.id}" ${mapState.module === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
-        <label class="chip" style="cursor:pointer"><input type="checkbox" id="mapLabels" ${mapState.labels ? 'checked' : ''} style="accent-color:var(--acc)"> 显示考点标签</label>
+        <label class="chip" id="mapLabelsWrap" style="cursor:pointer"><input type="checkbox" id="mapLabels" ${mapState.labels ? 'checked' : ''} style="accent-color:var(--acc)"> 显示考点标签</label>
         <span class="count" style="margin-left:auto;font-family:var(--mono)" id="mapCount"></span>
       </div>
-      <div class="map-layout">
+      <div class="map-layout" id="mapLayoutRoot">
         <div id="mapMain"></div>
         <div class="map-side" id="mapSide"></div>
       </div>`;
@@ -547,22 +632,74 @@
     const renderSide = () => { $('#mapSide').innerHTML = mapSide(mapState.selected); };
     const renderMain = () => {
       const box = $('#mapMain');
-      if (mapState.layout === 'galaxy') box.innerHTML = galaxyHTML();
+      const isCards = mapState.layout === 'cards';
+      $('#mapLayoutRoot').classList.toggle('wide', isCards);
+      $('#mapLabelsWrap').style.display = isCards ? 'none' : '';
+      if (isCards) { box.innerHTML = cardsHTML(); initCards(); }
+      else if (mapState.layout === 'galaxy') { box.innerHTML = galaxyHTML(); initGalaxy(renderSide); }
       else if (mapState.layout === 'tree') box.innerHTML = treeHTML();
       else box.innerHTML = heatHTML();
-      if (mapState.layout === 'galaxy') initGalaxy(renderSide);
-      $('#mapCount').textContent = `${modules.length} 模块 · ${points.length} 考点`;
-      renderSide();
+      $('#mapCount').textContent = isCards
+        ? `${cards.length} 张卡片`
+        : `${modules.length} 模块 · ${points.length} 考点`;
+      if (isCards) $('#mapSide').innerHTML = '';
+      else renderSide();
     };
 
     $('#mapLayout').addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
       mapState.layout = b.dataset.v;
-      $$('#mapLayout button').forEach(x => x.classList.toggle('on', x === b)); renderMain();
+      $$('#mapLayout button').forEach(x => x.classList.toggle('on', x === b));
+      setNav(mapState.layout === 'cards' ? 'cards' : 'map');
+      crumb(mapState.layout === 'cards'
+        ? [{ t: '知识地图', h: '#/map' }, { t: '知识卡片' }] : [{ t: '知识地图' }]);
+      renderMain();
     });
-    $('#mapModule').addEventListener('change', e => { mapState.module = e.target.value; renderMain(); });
+    $('#mapModule').addEventListener('change', e => {
+      mapState.module = e.target.value;
+      if (mapState.layout === 'cards') { /* 卡片墙有自己的模块筛选器 */ }
+      renderMain();
+    });
     $('#mapLabels').addEventListener('change', e => { mapState.labels = e.target.checked; renderMain(); });
     renderMain();
+  }
+
+  /* ---------- 知识卡片墙 ---------- */
+  function cardsHTML() {
+    return `<div class="card" style="padding:16px 18px">
+      <div class="card-head"><h2>公式 / 定理 / 性质 / 解题方法卡片</h2>
+        <span class="hint">点击卡片查看条件、要点与关联真题</span></div>
+      <div class="card-filters">
+        <div class="filter-group" id="cardTypes">${[['全部', '全部']].concat(cardTypes.map(t => [t.id, t.name]))
+          .map(([k, v]) => `<button data-v="${k}" class="${mapState.cardType === k ? 'on' : ''}">${v}</button>`).join('')}</div>
+        <select id="cardModule"><option value="全部">全部模块</option>${modules.map(m => `<option value="${m.id}" ${mapState.module === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+        <input type="search" id="cardQ" placeholder="搜索卡片标题 / 内容…" value="${esc(mapState.cardQ)}" style="width:230px">
+        <span class="count" id="cardCount" style="margin-left:auto;font-family:var(--mono)"></span>
+      </div>
+      <div class="card-wall" id="cardWall"></div>
+    </div>`;
+  }
+  function initCards() {
+    const draw = () => {
+      const q = mapState.cardQ.trim().toLowerCase();
+      const list = cards.filter(c =>
+        (mapState.cardType === '全部' || c.type === mapState.cardType) &&
+        (mapState.module === '全部' || c.moduleId === mapState.module) &&
+        (!q || `${c.id} ${c.title} ${c.body} ${c.cond} ${c.tip} ${c.moduleName} ${c.latex}`.toLowerCase().includes(q))
+      );
+      $('#cardWall').innerHTML = list.length
+        ? list.map(cardTile).join('')
+        : '<div class="empty"><span class="big">◌</span>没有符合条件的卡片，试试「中值」「积分」「级数」</div>';
+      $('#cardCount').textContent = `${list.length} / ${cards.length} 张`;
+    };
+    draw();
+    $('#cardTypes').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      mapState.cardType = b.dataset.v;
+      $$('#cardTypes button').forEach(x => x.classList.toggle('on', x === b)); draw();
+    });
+    $('#cardModule').addEventListener('change', e => { mapState.module = e.target.value; draw(); });
+    $('#cardQ').addEventListener('input', e => { mapState.cardQ = e.target.value; draw(); });
   }
 
   function galaxyHTML() {
@@ -723,6 +860,8 @@
         <div class="card"><div class="card-head"><h2>阶段分布</h2><span class="hint">初赛 / 补赛 / 决赛</span></div>${donut(byStage.filter(x => x.value))}
           <div class="divider"></div><div class="small muted" style="margin-bottom:8px">自动标注依据（关键词 · 权重）</div><div class="chips">${kw}</div></div>
       </div>
+      <div class="section-title">相关公式 / 定理 / 性质 / 方法 <span class="n">${(p.cardIds || []).length} 张卡片 · 均可跳到真题</span></div>
+      <div class="card"><div class="card-wall compact">${(p.cardIds || []).map(id => cardTile(C[id])).join('') || '<div class="small muted">暂无卡片</div>'}</div></div>
       <div class="section-title">关联试题 <span class="n">${qs.length} 道 · 点击直接跳转到 PDF 原页</span></div>
       <div class="card" id="topicTable" style="padding:6px 14px">
         <table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题型</th><th>题干摘要</th><th>考点</th><th>题目页</th><th>解答页</th></tr></thead>
@@ -740,6 +879,62 @@
       const b = e.target.closest('[data-openq]'); if (!b) return;
       openQuestion(Q[b.dataset.openq], b.dataset.m);
     });
+  }
+
+  /* ----------------------------- 视图：知识卡片详情 ----------------------------- */
+  function viewCard(id) {
+    const c = C[id];
+    if (!c) { $view.innerHTML = '<div class="empty">未找到该知识卡片</div>'; return; }
+    setNav('cards');
+    crumb([{ t: '知识地图', h: '#/map' }, { t: '知识卡片', h: '#/map?tab=cards' }, { t: c.title }]);
+    const qs = QofC(id);
+    const years = [...new Set(qs.map(q => q.year))].sort((a, b) => a - b);
+    const byYear = years.map(y => ({ label: String(y).slice(2), value: qs.filter(q => q.year === y).length }));
+    const hitWords = [...new Set(Object.values(c.hits || {}).flat())].slice(0, 12);
+
+    $view.innerHTML = `
+      <div class="page-head">
+        <div class="eyebrow"><span class="kc-badge" style="--kc:${c.typeColor};display:inline-grid;margin-right:8px">${esc(c.typeShort)}</span>
+          ${esc(c.typeName)} · ${c.id} · ${esc(c.moduleName)}</div>
+        <h1>${esc(c.title)}</h1>
+        <p>${esc(c.body)}</p>
+        <div class="chips" style="margin-top:10px">
+          <a class="chip count" href="#/map?tab=cards&type=${c.type}">${esc(c.typeName)}卡片</a>
+          <span class="chip">关联 ${c.count} 道真题</span>
+          <span class="chip">${c.pointIds.length} 个考点</span>
+          ${c.match === 'fallback' ? '<span class="chip">含考点兜底关联</span>' : ''}
+        </div>
+      </div>
+
+      <div class="kdetail-grid">
+        <div class="card kdetail-main" style="--kc:${c.typeColor}">
+          <div class="card-head"><h2>公式 / 结论</h2><span class="hint">KaTeX 排版</span></div>
+          ${mathHTML(c.latex, 'kc-math-big')}
+          <div class="divider"></div>
+          <div class="kc-sec"><span class="kc-sec-t">条件与适用</span><p>${esc(c.cond) || '—'}</p></div>
+          <div class="kc-sec"><span class="kc-sec-t">使用提示 / 易错点</span><p>${esc(c.tip) || '—'}</p></div>
+        </div>
+        <div class="stack">
+          <div class="card"><div class="card-head"><h2>对应考纲考点</h2></div>
+            <div class="chips">${c.pointIds.map(t => `<a class="chip" href="#/topic/${t}"><i class="dot" style="background:${PT[t] ? PT[t].color : '#888'}"></i>${esc(PT[t] ? PT[t].short : t)}</a>`).join('')}</div>
+            <div class="divider"></div>
+            <div class="card-head"><h2>关联真题 · 年度分布</h2><span class="hint">${c.count} 道</span></div>
+            ${columns(byYear.slice(-14))}
+          </div>
+          <div class="card"><div class="card-head"><h2>匹配依据</h2><span class="hint">关键词自动匹配</span></div>
+            <div class="chips">${hitWords.map(w => `<span class="chip">${esc(w)}</span>`).join('') || '<span class="small muted">人工指定 / 考点兜底</span>'}</div>
+            <div class="small muted" style="margin-top:10px">卡片与试题的对应由关键词规则生成（人工指定题优先），
+              少量题目由关联考点兜底补全；可据此判断某道题是否真正用到本卡片。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">关联真题 <span class="n">${qs.length} 道 · 题目页 / 解答页均可直接打开 PDF 原卷</span></div>
+      ${questionRows(qs, 'cardTable', 'data-openq')}
+      <div class="card tight" style="margin-top:18px"><div class="small muted">
+        ◇ 同模块其他卡片：<div class="chips" style="margin-top:8px">${cards.filter(x => x.moduleId === c.moduleId && x.id !== c.id).slice(0, 14).map(x => cardChip(x.id)).join('')}</div>
+      </div></div>`;
+    bindQuestionRows('cardTable', 'data-openq');
   }
 
   /* ----------------------------- 视图：考纲全文 ----------------------------- */
@@ -801,9 +996,13 @@
     }));
     const hot = D.topics.slice().sort((a, b) => b.count - a.count).slice(0, 15)
       .map(t => ({ label: `${PT[t.id].short} · ${t.id}`, value: t.count, color: PT[t.id].color, href: `#/topic/${t.id}` }));
+    const cardDist = cardTypes.map(t => ({
+      label: t.name, value: cards.filter(c => c.type === t.id).length,
+      color: t.color, href: `#/map?tab=cards&type=${t.id}`
+    }));
     $view.innerHTML = `
-      <div class="page-head"><div class="eyebrow">Analytics · 272 Questions</div><h1>统计分析</h1>
-        <p>基于 ${papers.length} 套试卷 / ${questions.length} 道大题的自动标注结果。一道题可归入多个考点，故模块题次总和大于试题数。</p></div>
+      <div class="page-head"><div class="eyebrow">Analytics · 272 Questions · ${meta.cardCount} Cards</div><h1>统计分析</h1>
+        <p>基于 ${papers.length} 套试卷 / ${questions.length} 道大题 / ${meta.cardCount} 张知识卡片的自动标注结果。一道题可归入多个考点与多张卡片，故分项总和大于试题数。</p></div>
       <div class="grid2">
         <div class="card"><div class="card-head"><h2>各模块题次</h2><span class="hint">点击可前往知识地图</span></div>${hbars(modCounts, { click: true, labelWidth: 145 })}</div>
         <div class="card"><div class="card-head"><h2>试卷阶段 / 试题题型</h2></div>
@@ -816,6 +1015,10 @@
       </div>
       <div class="card" style="margin-top:18px"><div class="card-head"><h2>最常考的 15 个知识点</h2><span class="hint">点击查看详情</span></div>
         ${hbars(hot, { click: true, labelWidth: 210 })}</div>
+      <div class="card" style="margin-top:18px"><div class="card-head"><h2>知识卡片构成</h2>
+          <a class="hint" href="#/map?tab=cards">查看全部 ${cards.length} 张 →</a></div>
+        ${hbars(cardDist, { click: true, labelWidth: 130 })}
+        <div class="small muted" style="margin-top:12px">每张卡片平均关联 ${(cards.reduce((a, c) => a + c.count, 0) / cards.length).toFixed(1)} 道真题。</div></div>
       <div class="card" style="margin-top:18px"><div class="card-head"><h2>模块 × 届次 热力图</h2><span class="hint">切换「知识地图 → 热力图」可交互</span></div>${heatHTMLInner()}</div>`;
   }
 
@@ -844,10 +1047,13 @@
     ) : [];
     const hitP = q ? papers.filter(x => `${x.year} ${x.short} ${x.title} ${x.code} ${x.stage} ${x.group}`.toLowerCase().includes(low)) : [];
     const hitT = q ? points.filter(x => `${x.id} ${x.text} ${x.moduleName} ${x.short}`.toLowerCase().includes(low)) : [];
+    const hitC = q ? cards.filter(x => `${x.id} ${x.title} ${x.typeName} ${x.body} ${x.cond} ${x.tip} ${x.latex} ${x.moduleName}`.toLowerCase().includes(low)) : [];
     $view.innerHTML = `
       <div class="page-head"><div class="eyebrow">Search</div><h1>搜索结果</h1>
-        <p>关键词「<b style="color:var(--acc)">${esc(q)}</b>」命中 ${hitQ.length} 道试题 · ${hitP.length} 套试卷 · ${hitT.length} 个考点。</p></div>
+        <p>关键词「<b style="color:var(--acc)">${esc(q)}</b>」命中 ${hitQ.length} 道试题 · ${hitP.length} 套试卷 · ${hitT.length} 个考点 · ${hitC.length} 张知识卡片。</p></div>
       ${!q ? '<div class="empty"><span class="big">⌕</span>在右上角输入关键词，或直接按 / 聚焦搜索框</div>' : ''}
+      ${hitC.length ? `<div class="section-title">知识卡片 <span class="n">${hitC.length}</span></div>
+        <div class="card"><div class="card-wall compact">${hitC.slice(0, 12).map(cardTile).join('')}</div></div>` : ''}
       ${hitT.length ? `<div class="section-title">考点 <span class="n">${hitT.length}</span></div>
         <div class="card"><div class="chips">${hitT.slice(0, 40).map(p => `<a class="chip" href="#/topic/${p.id}"><i class="dot" style="background:${p.color}"></i>${esc(p.short)} · ${cnt(p.id)} 题</a>`).join('')}</div></div>` : ''}
       ${hitP.length ? `<div class="section-title">试卷 <span class="n">${hitP.length}</span></div><div class="paper-grid">${hitP.slice(0, 12).map(paperCard).join('')}</div>` : ''}
@@ -861,7 +1067,7 @@
           <td><button class="btn sm" data-sq="${x.id}" data-sm="question">P${x.questionPage}</button></td>
           <td><button class="btn sm" data-sq="${x.id}" data-sm="solution">P${x.solutionPage}</button></td>
         </tr>`).join('')}</tbody></table></div>` : ''}
-      ${q && !hitQ.length && !hitP.length && !hitT.length ? '<div class="empty"><span class="big">◌</span>没有匹配结果，试试「中值定理」「格林」「幂级数」「矩阵」等关键词</div>' : ''}`;
+      ${q && !hitQ.length && !hitP.length && !hitT.length && !hitC.length ? '<div class="empty"><span class="big">◌</span>没有匹配结果，试试「中值定理」「格林」「幂级数」「矩阵」等关键词</div>' : ''}`;
     const st = $('#searchTable');
     if (st) st.addEventListener('click', e => {
       const b = e.target.closest('[data-sq]'); if (!b) return;
@@ -882,8 +1088,9 @@
       viewPaper(parts[1], params.get('q'));
       return;
     }
-    else if (parts[0] === 'map') viewMap();
+    else if (parts[0] === 'map') viewMap(params);
     else if (parts[0] === 'topic') viewTopic(parts[1]);
+    else if (parts[0] === 'card') viewCard(parts[1]);
     else if (parts[0] === 'stats') viewStats();
     else if (parts[0] === 'syllabus') viewSyllabus();
     else if (parts[0] === 'search') viewSearch(params);

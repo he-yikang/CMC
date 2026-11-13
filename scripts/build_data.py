@@ -3,13 +3,15 @@
 CMC 站点数据生成脚本
 --------------------------------
 输入:
-  assets/cmc-papers.pdf   （《全国大学生数学竞赛历届真题与详解》第一至第十七届）
+  assets/cmc-papers.pdf       （《全国大学生数学竞赛历届真题与详解》第一至第十七届）
   scripts/syllabus_source.json（由 CMC非数A高数考纲.docx 逐条转录的考纲 + 关键词规则）
+  scripts/cards_source.json   （公式 / 定理 / 性质 / 解题方法 知识卡片库）
 输出:
   assets/data/papers.json      42 套试卷元数据
-  assets/data/questions.json   272 道大题（题干、解答摘要、双向页码、考点标注）
+  assets/data/questions.json   272 道大题（题干、解答摘要、双向页码、考点、关联卡片）
   assets/data/syllabus.json    8 大考纲模块 + 1 补充模块 / 62 + 2 个知识点
   assets/data/topics.json      知识点 -> 试题的映射与统计
+  assets/data/cards.json       94 张知识卡片及其关联真题
   assets/data/meta.json        汇总信息
 
 重新生成:  python scripts/build_data.py
@@ -34,6 +36,7 @@ except ImportError:
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PDF_PATH = os.path.join(ROOT, "assets", "cmc-papers.pdf")
 SRC_PATH = os.path.join(ROOT, "scripts", "syllabus_source.json")
+CARDS_PATH = os.path.join(ROOT, "scripts", "cards_source.json")
 OUT_DIR = os.path.join(ROOT, "assets", "data")
 
 CN_NUM = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7,
@@ -87,6 +90,67 @@ def is_noise(line):
     if not line:
         return True
     return any(r.match(line) for r in NOISE_RE)
+
+
+# ---- 说明文字中的行内 LaTeX → 可读 Unicode（卡片主公式仍由 KaTeX 渲染） ----
+_IN_FRAC = re.compile(r"\\(?:d?frac|tfrac)\{((?:[^{}]|\{[^{}]*\})*)\}\{((?:[^{}]|\{[^{}]*\})*)\}")
+_IN_FRAC_SHORT = re.compile(r"\\frac\s*([A-Za-z0-9])\s*([A-Za-z0-9])(?![A-Za-z0-9])")
+_IN_LIMSUB = re.compile(r"\\(lim|sum|prod)\s*_\{([^{}]*)\}(?:\^\{([^{}]*)\})?")
+_IN_SQRT = re.compile(r"\\sqrt\{([^{}]*)\}")
+_IN_TEXT = re.compile(r"\\(?:text|mathrm|operatorname|mathbf|boldsymbol|overline|hat)\{([^{}]*)\}")
+_IN_CMD = re.compile(r"\\([a-zA-Z]+)")
+_IN_SYM = {
+    r"\lim": "lim", r"\to": "→", r"\sim": "∼", r"\Rightarrow": "⇒",
+    r"\Longrightarrow": "⇒", r"\iff": "⇔", r"\infty": "∞",
+    r"\leqslant": "≤", r"\geqslant": "≥", r"\le": "≤", r"\ge": "≥",
+    r"\ne": "≠", r"\neq": "≠", r"\int": "∫", r"\iint": "∬",
+    r"\iiint": "∭", r"\oint": "∮", r"\oiint": "∯", r"\sum": "∑",
+    r"\partial": "∂", r"\cdot": "·", r"\times": "×", r"\pm": "±",
+    r"\approx": "≈", r"\equiv": "≡", r"\perp": "⊥", r"\parallel": "∥",
+    r"\in": "∈", r"\notin": "∉", r"\subset": "⊂", r"\cup": "∪",
+    r"\alpha": "α", r"\beta": "β", r"\gamma": "γ", r"\lambda": "λ",
+    r"\varphi": "φ", r"\phi": "φ", r"\xi": "ξ", r"\theta": "θ",
+    r"\rho": "ρ", r"\pi": "π", r"\Delta": "Δ", r"\nabla": "∇",
+    r"\cdots": "⋯", r"\ldots": "…", r"\dots": "…",
+    r"\cos": "cos", r"\sin": "sin", r"\tan": "tan", r"\ln": "ln",
+    r"\log": "log", r"\arcsin": "arcsin", r"\arctan": "arctan",
+    r"\max": "max", r"\min": "min", r"\exp": "exp", r"\binom": "C",
+    r"\left": "", r"\right": "", r"\quad": " ", r"\qquad": "  ",
+    r"\;": " ", r"\,": " ", r"\!": "", r"\ ": " ", r"\\": "; ",
+    r"\{": "{", r"\}": "}", r"\%": "%",
+}
+
+
+def clean_inline(s):
+    """把说明文字里的行内 LaTeX 片段转成可读文本，保留中文句子结构。"""
+    if not s:
+        return ""
+    s = s.replace("\\\\", "; ")
+    s = _IN_FRAC_SHORT.sub(r"\\frac{\1}{\2}", s)
+    s = _IN_LIMSUB.sub(lambda m: ("lim" if m.group(1) == "lim" else
+                                  "∑" if m.group(1) == "sum" else "∏")
+                        + "(" + m.group(2) + ")"
+                        + ("^{" + m.group(3) + "}" if m.group(3) else ""), s)
+    for _ in range(3):
+        new = _IN_FRAC.sub(lambda m: f"({m.group(1)})/({m.group(2)})", s)
+        if new == s:
+            break
+        s = new
+    for _ in range(3):
+        new = _IN_SQRT.sub(lambda m: "√(" + m.group(1) + ")", s)
+        if new == s:
+            break
+        s = new
+    for _ in range(3):
+        new = _IN_TEXT.sub(lambda m: m.group(1), s)
+        if new == s:
+            break
+        s = new
+    for k in sorted(_IN_SYM, key=len, reverse=True):
+        s = s.replace(k, _IN_SYM[k])
+    s = _IN_CMD.sub(lambda m: m.group(1), s)
+    s = s.replace("{", "").replace("}", "")
+    return re.sub(r"[ \t]{2,}", " ", s).strip()
 
 
 def tidy(lines, limit=1600):
@@ -321,6 +385,105 @@ def tag_questions(questions, syllabus):
     return topics
 
 
+# ----------------------------------------------------- 5. 知识卡片 ↔ 真题
+def build_cards(questions, syllabus):
+    """把公式/定理/性质/解题方法卡片按关键词匹配到真题，并做双向回填。
+
+    优先级：人工指定(must) > 关键词匹配 > 关联考点兜底。
+    每张卡至少 5 道关联试题，确保「卡片—真题」对应在站点上始终可见。
+    """
+    src = json.load(open(CARDS_PATH, encoding="utf-8"))
+    type_map = {t["id"]: t for t in src["types"]}
+    mod_map = {m["id"]: m for m in syllabus["modules"]}
+    text_of = {q["id"]: " ".join([q["heading"], q["stem"], q["solution"][:400]])
+               for q in questions}
+    q_ids = {q["id"] for q in questions}
+    by_q = {q["id"]: q for q in questions}
+
+    cards, card_score = [], {}
+    for raw in src["cards"]:
+        score_map, hits = {}, {}
+        for qid, text in text_of.items():
+            s, h = 0, []
+            for kw, w in raw["kw"]:
+                n = text.count(kw)
+                if n:
+                    s += w * min(n, 3)
+                    h.append(kw)
+            if s:
+                score_map[qid] = s
+                hits[qid] = h[:6]
+        scored = sorted(score_map.items(), key=lambda x: (-x[1], x[0]))
+        card_score[raw["id"]] = score_map
+
+        manual = [m for m in raw.get("must", []) if m in q_ids]
+        auto = [qid for qid, s in scored if s >= 4]
+        ids = (manual + [x for x in auto if x not in manual])[:18]
+        method = "auto" if len(ids) >= 5 else "fallback"
+        if len(ids) < 5:
+            # 逐级兜底：关联考点 → 同模块考点 → 全库，保证卡片始终有真题可看
+            mod_points = {p["id"] for p in syllabus["points"]
+                          if p["moduleId"] == raw["moduleId"]}
+            pool = ([q["id"] for q in questions
+                     if any(t in q["topics"] for t in raw["pointIds"])] +
+                    [q["id"] for q in questions
+                     if any(t in q["topics"] for t in mod_points)] +
+                    [q["id"] for q in questions])
+            for x in pool:
+                if len(ids) >= 5:
+                    break
+                if x not in ids:
+                    ids.append(x)
+
+        qs = [by_q[i] for i in ids]
+        cards.append({
+            "id": raw["id"],
+            "type": raw["type"],
+            "typeName": type_map[raw["type"]]["name"],
+            "typeShort": type_map[raw["type"]]["short"],
+            "typeColor": type_map[raw["type"]]["color"],
+            "title": raw["title"],
+            "moduleId": raw["moduleId"],
+            "moduleName": mod_map[raw["moduleId"]]["name"],
+            "moduleColor": mod_map[raw["moduleId"]]["color"],
+            "pointIds": raw["pointIds"],
+            "latex": raw["latex"],
+            "body": clean_inline(raw.get("body", "")),
+            "cond": clean_inline(raw.get("cond", "")),
+            "tip": clean_inline(raw.get("tip", "")),
+            "questionIds": ids,
+            "manualIds": manual,
+            "count": len(ids),
+            "match": method,
+            "hits": hits,
+            "byYear": dict(sorted(Counter(q["year"] for q in qs).items())),
+            "byStage": dict(Counter(q["stage"] for q in qs)),
+        })
+
+    # 反向：题目 -> 卡片（人工指定 > 卡片收录 > 关键词匹配分）
+    point_mod = {p["id"]: p["moduleId"] for p in syllabus["points"]}
+    for q in questions:
+        rel = []
+        for c in cards:
+            s = card_score[c["id"]].get(q["id"], 0)
+            w = (s + (12 if q["id"] in c["manualIds"] else 0)
+                 + (6 if q["id"] in c["questionIds"] else 0))
+            if w > 0:
+                rel.append((c["id"], w))
+        rel.sort(key=lambda x: (-x[1], x[0]))
+        q["cardIds"] = [cid for cid, _ in rel[:5]]
+        if not q["cardIds"]:  # 全无命中时按该题所属模块挂 2 张卡
+            mods = {point_mod[t] for t in q["topics"] if t in point_mod}
+            q["cardIds"] = [c["id"] for c in cards
+                            if c["moduleId"] in mods][:2] or [cards[0]["id"]]
+
+    # 反向：知识点 -> 卡片
+    for p in syllabus["points"]:
+        p["cardIds"] = [c["id"] for c in cards if p["id"] in c["pointIds"]]
+
+    return cards, src["types"]
+
+
 # ---------------------------------------------------------------------- main
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -331,12 +494,17 @@ def main():
     questions = parse_questions(doc, papers, sol_of, q_of)
     syllabus = build_syllabus()
     topics = tag_questions(questions, syllabus)
+    cards, card_types = build_cards(questions, syllabus)
+    syllabus["cardTypes"] = card_types
 
-    # 每套试卷的题数
     for p in papers:
         qs = [q for q in questions if q["paperId"] == p["id"]]
         p["questionCount"] = len(qs)
         p["topicIds"] = sorted({t for q in qs for t in q["topics"]})
+        p["cardIds"] = sorted({c for q in qs for c in q["cardIds"]})
+
+    for t in topics:
+        t["cardIds"] = [c["id"] for c in cards if t["id"] in c["pointIds"]]
 
     meta = {
         "paperCount": len(papers),
@@ -346,6 +514,8 @@ def main():
         "pointCount": len(syllabus["points"]),
         "officialPointCount": sum(1 for p in syllabus["points"]
                                   if not p["moduleId"] == "M9"),
+        "cardCount": len(cards),
+        "cardTypeCounts": dict(Counter(c["type"] for c in cards)),
         "editionCount": len({p["edition"] for p in papers}),
         "yearMin": min(p["year"] for p in papers),
         "yearMax": max(p["year"] for p in papers),
@@ -365,10 +535,12 @@ def main():
     dump("syllabus.json", syllabus)
     dump("topics.json", topics)
     dump("meta.json", meta)
+    dump("cards.json", {"types": card_types, "cards": cards})
     # 同时产出一个可直接 <script> 引入的数据包：无需 fetch，file:// 或静态托管都能用
     bundle = {
         "meta": meta, "papers": papers, "questions": questions,
         "syllabus": syllabus, "topics": topics,
+        "cards": cards, "cardTypes": card_types,
     }
     bp = os.path.join(OUT_DIR, "bundle.js")
     with open(bp, "w", encoding="utf-8") as f:
@@ -377,7 +549,12 @@ def main():
         f.write(";\n")
     print(f"  {'bundle.js':18s} {os.path.getsize(bp) / 1024:.1f} KB")
     print(f"\n共 {len(papers)} 套 / {len(questions)} 道 / "
-          f"{len(syllabus['modules'])} 模块 / {len(syllabus['points'])} 考点")
+          f"{len(syllabus['modules'])} 模块 / {len(syllabus['points'])} 考点 / {len(cards)} 卡片")
+    print("卡片关联题数: min %d / max %d / 平均 %.1f" % (
+        min(c["count"] for c in cards), max(c["count"] for c in cards),
+        sum(c["count"] for c in cards) / len(cards)))
+    print("卡片匹配方式:", dict(Counter(c["match"] for c in cards)))
+    print("未挂卡片的试题:", sum(1 for q in questions if not q["cardIds"]))
     untagged = [q["id"] for q in questions if not q["topics"]]
     print("未标注考点:", len(untagged), untagged[:15])
     print("题型分布:", dict(Counter(q["type"] for q in questions)))
