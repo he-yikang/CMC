@@ -76,7 +76,9 @@
     "M1-05"
    ],
    "latex": "\\sin x\\sim x,\\quad \\tan x\\sim x,\\quad 1-\\cos x\\sim\\frac{x^{2}}{2},\\quad \\ln(1+x)\\sim x",
-   "body": "配套：e^{x}-1\\sim x，\\arcsin x\\sim x，\\arctan x\\sim x，(1+x)^{\\alpha}-1\\sim \\alpha x，x-\\ln(1+x)\\sim \\frac{x^{2}}{2}。",
+   "latexFull": "\\begin{aligned}\\sin x&\\sim x, &\\tan x&\\sim x, &1-\\cos x&\\sim\\frac{x^{2}}{2},\\\\[6pt]\\ln(1+x)&\\sim x, &e^{x}-1&\\sim x, &\\arcsin x&\\sim x,\\\\[6pt]\\arctan x&\\sim x, &(1+x)^{\\alpha}-1&\\sim\\alpha x, &x-\\ln(1+x)&\\sim\\frac{x^{2}}{2}\\end{aligned}",
+   "latexFullMobile": "\\begin{aligned}\\sin x&\\sim x\\\\[4pt]\\tan x&\\sim x\\\\[4pt]1-\\cos x&\\sim\\frac{x^{2}}{2}\\\\[4pt]\\ln(1+x)&\\sim x\\\\[4pt]e^{x}-1&\\sim x\\\\[4pt]\\arcsin x&\\sim x\\\\[4pt]\\arctan x&\\sim x\\\\[4pt](1+x)^{\\alpha}-1&\\sim\\alpha x\\\\[4pt]x-\\ln(1+x)&\\sim\\frac{x^{2}}{2}\\end{aligned}",
+   "body": "x→0 时九个常用等价无穷小：sin x、tan x、1−cos x、ln(1+x)、e^x−1、arcsin x、arctan x、(1+x)^α−1 与 x−ln(1+x)；用于乘除因子中的整体替换。",
    "cond": "只能在乘除因子中整体替换；加减项中替换需先用泰勒展开确认阶数。",
    "tip": "求极限时优先做等价替换可大幅降阶，再配合洛必达或泰勒。",
    "kw": [
