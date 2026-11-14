@@ -466,6 +466,21 @@ def parse_questions(doc, papers, sol_of, q_of):
             buckets[norm_code(smarks[i][2])].append(t)
     for q in questions:
         q["solution"] = tidy(buckets.get(norm_code(q["id"]), []), 900)
+
+    # 第 17 届决赛 B 类原书分值误印（六 12 / 七 24，合计 110 ≠ 卷首满分 100）。
+    # PDF 里的数字已订正为六 14 / 七 12；文本行被拆开后 heading 会缺数字，这里补回完整标题。
+    POINT_FIX = {
+        "17B决.6": (14, "六、（本题满分14 分）"),
+        "17B决.7": (12, "七、（本题满分12 分）"),
+    }
+    for q in questions:
+        if q["id"] in POINT_FIX:
+            q["points"], q["heading"] = POINT_FIX[q["id"]]
+    # 只挖数字会把标题行拆成两段，多余的「分)」会混进题干/解答，清掉
+    FRAG = re.compile(r"^分\s*[)）]\s*$", re.M)
+    for q in questions:
+        q["stem"] = FRAG.sub("", q["stem"]).lstrip("\n")
+        q["solution"] = FRAG.sub("", q["solution"]).lstrip("\n")
     return questions
 
 

@@ -38,6 +38,36 @@ GROUP_FIX_OLD = "非数学类A组"
 GROUP_FIX_NEW = "非数学类"
 GROUP_FIX_PAGES = [55, 56] + list(range(197, 205))
 
+# 第 17 届决赛 B 类（卷序 42）分值订正：原书把「六」印成 12 分、「七」印成 24 分，
+# 合计 110 分与卷首「满分 100 分」矛盾；正确为六 14 分、七 12 分。
+# 只替换数字字符（不整行涂改），保住「六、」「七、」标题行，题目解析不受影响。
+# (页, 匹配行文本, 原数字, 新数字, 表格列 x 定位或 None)
+POINT_FIX = [
+    (98,  "12", "12", "14", 401.3),
+    (98,  "24", "24", "12", 455.9),
+    (100, "六、（本题满分12 分）", "12", "14", None),
+    (100, "七、（本题满分24 分）", "24", "12", None),
+    (317, "六、（本题满分12 分）", "12", "14", None),
+    (317, "七、（本题满分24 分）", "24", "12", None),
+]
+
+
+def digit_rect(page, line_y, needle):
+    """在一行里找出 needle 这几个数字字符的精确包围盒。"""
+    for b in page.get_text("rawdict")["blocks"]:
+        if b["type"] != 0:
+            continue
+        for l in b["lines"]:
+            if abs(l["bbox"][1] - line_y) > 1.5:
+                continue
+            for sp in l["spans"]:
+                chars = sp["chars"]
+                txt = "".join(c["c"] for c in chars)
+                i = txt.find(needle)
+                if i >= 0:
+                    return pymupdf.Rect(chars[i]["bbox"]) | pymupdf.Rect(chars[i + len(needle) - 1]["bbox"])
+    return None
+
 MONO = ("2009", "第一届")  # 占位，无实际作用
 
 
@@ -200,6 +230,28 @@ def main():
             plan.append((pno - 1, rects, draws))
             char_pool.update(GROUP_FIX_NEW)
             print("组别修正 P%d: %d 处" % (pno, len(rects)))
+
+    # 分值订正：只挖掉数字，原行其余文字保留，按原字号/颜色重绘新数字
+    for pno, line_text, old, new, xpos in POINT_FIX:
+        page = doc[pno - 1]
+        rects, draws = [], []
+        for l in lines_of(page):
+            if re.sub(r"\s+", "", l["text"]) != re.sub(r"\s+", "", line_text):
+                continue
+            if xpos is not None and abs(l["rect"].x0 - xpos) > 4:
+                continue
+            rect = (l["rect"] if xpos is not None
+                    else digit_rect(page, l["rect"].y0, old))
+            if rect is None:
+                continue
+            w_new = pymupdf.get_text_length(new, fontname="tiro", fontsize=l["size"])
+            scale = min(1.0, rect.width / w_new) if w_new else 1.0
+            rects.append(pymupdf.Rect(rect.x0 - .3, rect.y0 - .5, rect.x1 + .3, rect.y1 + .5))
+            draws.append((rect.x0, l["base"], new, l["size"] * scale, l["color"], "left"))
+        if rects:
+            plan.append((pno - 1, rects, draws))
+            char_pool.update(new)
+            print("分值订正 P%d: %d 处 -> %s" % (pno, len(rects), new))
 
     # ---------- 2. 总目录（第 2、3 页） ----------
     toc_plan = []
