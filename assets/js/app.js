@@ -562,6 +562,7 @@
   /** 卡片 / 表格里的原卷小图。文本抽取会把公式拆散，所以题目一律用裁切图。 */
   function thumbHTML(q, key = 'thumb', cls = '') {
     return `<div class="qi-pv ${cls}" title="点击看完整题目">
+      <div class="qi-pv-wait">原卷载入中…</div>
       <canvas data-thumb="${(q[key] || []).join(',')}"></canvas>
       <div class="qi-pv-fb">${esc(q.excerpt)}</div>
     </div>`;
