@@ -331,7 +331,7 @@
         <button class="btn sm" data-act="fit">适应宽度</button>
         <span class="sp"></span>
         <span class="mode" id="${this.opts.modeId || 'vmode'}">—</span>
-        <span class="link-hint" title="已启用 PDF 原生内部链接：目录页码、题目页「参考解答(01.1)」与解答页「返回题目(01.1)」编号都可直接点击跳转">🔗 内部链接</span>
+        <span class="link-hint" title="已启用 PDF 原生内部链接：目录页码、题目页「参考解答(1初.1)」与解答页「返回题目(1初.1)」编号都可直接点击跳转">🔗 内部链接</span>
         <button class="btn sm" data-act="swap" title="在题目与解答之间跳转">⇄ 切换</button>
         <a class="btn sm" data-act="raw" href="assets/cmc-papers.pdf" target="_blank" rel="noopener">原件 ↗</a>`;
       this.toolbar.addEventListener('click', e => {
@@ -481,7 +481,7 @@
     /**
      * 渲染 PDF 的链接注解层。
      * pdf.js 只画页面内容，不画 /Annots；这份真题 PDF 的目录页码、
-     * 「参考解答(01.1)」「返回题目(01.1)」都是 LINK_GOTO 注解，
+     * 「参考解答(1初.1)」「返回题目(1初.1)」都是 LINK_GOTO 注解，
      * 因此需要按 page.getAnnotations() 手工铺一层可点的透明热区。
      */
     async renderLinks(doc, page, vp, tk) {
@@ -838,7 +838,7 @@
         <div class="filter-group" data-f="stage">${['全部', '初赛', '补赛', '决赛'].map(x => `<button data-v="${x}" class="${paperFilter.stage === x ? 'on' : ''}">${x}</button>`).join('')}</div>
         <div class="filter-group" data-f="group">${['全部', 'A 类', 'B 类', '不分 A/B'].map(x => `<button data-v="${x}" class="${paperFilter.group === x ? 'on' : ''}">${x}</button>`).join('')}</div>
         <select id="fYear"><option value="全部">全部年份</option>${years.map(y => `<option value="${y}" ${String(paperFilter.year) === String(y) ? 'selected' : ''}>${y} 年</option>`).join('')}</select>
-        <input type="search" id="fQ" placeholder="搜索年份 / 届次 / 卷序" value="${esc(paperFilter.q)}" style="width:210px">
+        <input type="search" id="fQ" placeholder="搜索年份 / 届次 / 标号" value="${esc(paperFilter.q)}" style="width:210px">
         <span class="count" id="pCount"></span>
       </div>
       <div class="paper-grid" id="paperGrid"></div>`;
