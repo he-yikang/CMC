@@ -30,6 +30,14 @@ PDF = os.environ.get("CMC_PDF") or os.path.join(ROOT, "assets", "cmc-papers.pdf"
 CODES = os.path.join(ROOT, "scripts", "paper_codes.json")
 VF = "C:/Windows/Fonts/NotoSansSC-VF.ttf"
 
+# 第 1 届决赛（卷序 24）不分 A/B 类：标号只写「1决」，原书印的
+# 「非数学类A 组」也统一改成「非数学类」。只限这一套的目录行与正文页，
+# 其余届次的 A/B 组标注是真实分组，保持原样。
+GROUP_FIX_SEQ = "24"
+GROUP_FIX_OLD = "非数学类A组"
+GROUP_FIX_NEW = "非数学类"
+GROUP_FIX_PAGES = [55, 56] + list(range(197, 205))
+
 MONO = ("2009", "第一届")  # 占位，无实际作用
 
 
@@ -177,6 +185,22 @@ def main():
             for _, _, t, *_ in draws:
                 char_pool.update(t)
 
+    # 第 1 届决赛卷面上的组别标注（页眉 + 试卷抬头）
+    for pno in GROUP_FIX_PAGES:
+        page = doc[pno - 1]
+        rects, draws = [], []
+        for l in lines_of(page):
+            if re.sub(r"\s+", "", l["text"]) != GROUP_FIX_OLD:
+                continue
+            rects.append(pymupdf.Rect(l["rect"].x0 - 1, l["rect"].y0 - 1,
+                                      l["rect"].x1 + 1, l["rect"].y1 + 1))
+            draws.append((l["rect"].x0, l["base"], GROUP_FIX_NEW,
+                          l["size"], l["color"], "left"))
+        if rects:
+            plan.append((pno - 1, rects, draws))
+            char_pool.update(GROUP_FIX_NEW)
+            print("组别修正 P%d: %d 处" % (pno, len(rects)))
+
     # ---------- 2. 总目录（第 2、3 页） ----------
     toc_plan = []
     rows = []      # (page_index, row_y, code_rect, title, group, size, color)
@@ -202,6 +226,8 @@ def main():
             grp = next((x for x in ls if abs(x["base"] - row_y) < 3 and x["text"].startswith("非数学")), None)
             if not title:
                 continue
+            if l["text"] == GROUP_FIX_SEQ and grp:
+                grp["text"] = GROUP_FIX_NEW
             rows.append((pno - 1, l, title, grp))
     for pno, code_l, title, grp in rows:
         new = codes[code_l["text"]]
@@ -217,6 +243,7 @@ def main():
         char_pool.update(title["text"])
         if grp:
             char_pool.update(grp["text"])
+            char_pool.update(GROUP_FIX_NEW)
 
     if dry:
         print("正文页待改:", len(plan), "目录待改:", len(toc_plan), "目录行:", len(rows))
