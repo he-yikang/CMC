@@ -1321,11 +1321,17 @@
       acc += g.mods.length + GAP;
     });
     const nodes = [];
+    // 模块名标签固定挂在 hub 正下方（y+38..y+70），节点环避开这一段角度，
+    // 否则气泡会直接盖住文字 —— 这是原先「打架」的主因。
+    const LBL_START = Math.PI / 2 + 0.66;
+    const LBL_SPAN = 2 * Math.PI - 1.32;
+    const labelBoxes = mods.map(m => ({ x0: m._x - 62, x1: m._x + 62,
+                                        y0: m._y + 38, y1: m._y + 72 }));
     mods.forEach(m => {
       const pts = points.filter(p => p.moduleId === m.id);
       pts.forEach((p, j) => {
         const seed = p.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-        const a = -Math.PI / 2 + j * 2 * Math.PI / pts.length + (seed % 17) * .006;
+        const a = LBL_START + (j + 0.5) / pts.length * LBL_SPAN + (seed % 17) * .006;
         const c = cnt(p.id);
         const rr = 56 + (j % 3) * 12 + Math.min(30, Math.sqrt(c) * 4.5) + (seed % 9);
         p._x = m._x + rr * Math.cos(a);
@@ -1335,8 +1341,8 @@
         nodes.push(p);
       });
     });
-    // 轻度斥力，避免重叠
-    for (let it = 0; it < 70; it++) {
+    // 斥力 + 标签保护区：节点之间分开，且不得进入任何模块名标签框
+    for (let it = 0; it < 140; it++) {
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           const a = nodes[i], b = nodes[j];
@@ -1349,7 +1355,31 @@
           }
         }
       }
-      nodes.forEach(p => { p._x += (p._hx - p._x) * .012; p._y += (p._hy - p._y) * .012; });
+      nodes.forEach(p => {
+        p._x += (p._hx - p._x) * .010; p._y += (p._hy - p._y) * .010;
+        // 不压任何模块编号圈
+        for (const m of mods) {
+          const dx = p._x - m._x, dy = p._y - m._y;
+          const d = Math.hypot(dx, dy) || 1, minD = 34 + p._r + 5;
+          if (d < minD) {
+            p._x = m._x + dx / d * minD;
+            p._y = m._y + dy / d * minD;
+          }
+        }
+        // 落在标签框里时向下 / 左右推出（不往上推，避免压到 hub 圆）
+        for (const b of labelBoxes) {
+          const pad = p._r + 4;
+          if (p._x > b.x0 - pad && p._x < b.x1 + pad &&
+              p._y > b.y0 - pad && p._y < b.y1 + pad) {
+            const dl = p._x - (b.x0 - pad), dr = (b.x1 + pad) - p._x;
+            const db = (b.y1 + pad) - p._y;
+            const mn = Math.min(dl, dr, db);
+            if (mn === db) p._y = b.y1 + pad + 1;
+            else if (mn === dl) p._x = b.x0 - pad - 1;
+            else p._x = b.x1 + pad + 1;
+          }
+        }
+      });
     }
     return { W, H, mods, nodes };
   }
@@ -1542,20 +1572,30 @@
     const all = mapState.module === '全部' && mapState.subject === '全部';
     const spokes = all ? visM.map(m => `<line x1="${L.W / 2}" y1="${L.H / 2}" x2="${m._x}" y2="${m._y}"
         stroke="rgba(139,123,255,.12)" stroke-dasharray="3 7"/>`).join('') : '';
-    const hubs = visM.map(m => {
-      const c = points.filter(p => p.moduleId === m.id).reduce((a, p) => a + cnt(p.id), 0);
-      const nm = m.name.length > 11 ? m.name.slice(0, 11) + '…' : m.name;
-      return `<g>
+    const hubs = visM.map(m => `<g>
         <circle cx="${m._x}" cy="${m._y}" r="34" fill="${m.color}" fill-opacity=".1" stroke="${m.color}"
                 stroke-opacity=".45" ${m.subject === '线性代数' ? 'stroke-dasharray="4 3"' : ''}/>
         <circle cx="${m._x}" cy="${m._y}" r="20" fill="${m.color}" fill-opacity=".28"/>
-        <text class="hub-lab" x="${m._x}" y="${m._y + 6}" style="font-size:17px">${m.no}</text>
-        <text x="${m._x}" y="${m._y + 54}" text-anchor="middle" font-size="10" fill="#a7aec6"
-              style="pointer-events:none">${esc(nm)}</text>
-        <text x="${m._x}" y="${m._y + 68}" text-anchor="middle" font-size="9" fill="#6b7391"
-              style="pointer-events:none" font-family="var(--mono)">${c} 题次</text>
+      </g>`).join('');
+    // 模块名单独成层、最后绘制：即使还有个别气泡靠近，文字也不会被盖住
+    const hubLabels = visM.map(m => {
+      const c = points.filter(p => p.moduleId === m.id).reduce((a, p) => a + cnt(p.id), 0);
+      const nm = m.name.length > 10 ? m.name.slice(0, 10) + '…' : m.name;
+      const w = 126, h = 32, x = m._x - w / 2, y = m._y + 40;
+      return `<g class="hub-tag" style="pointer-events:none">
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8"
+              fill="#121428" fill-opacity=".95" stroke="${m.color}" stroke-opacity=".38"/>
+        <text x="${m._x}" y="${y + 14}" text-anchor="middle" font-size="10" fill="#cbd1e8">${esc(nm)}</text>
+        <text x="${m._x}" y="${y + 26}" text-anchor="middle" font-size="9" fill="#7d87ab"
+              font-family="var(--mono)">${c} 题次</text>
       </g>`;
     }).join('');
+    // 模块编号最后绘制，带小底衬，任何情况下都清晰
+    const hubNums = visM.map(m => `<g class="hub-num" style="pointer-events:none">
+        <circle cx="${m._x}" cy="${m._y}" r="15" fill="#121428" fill-opacity=".92"
+                stroke="${m.color}" stroke-opacity=".5"/>
+        <text class="hub-lab" x="${m._x}" y="${m._y + 6}" style="font-size:17px">${m.no}</text>
+      </g>`).join('');
     const nodes = visP.map(p => {
       const c = cnt(p.id), sel = p.id === mapState.selected;
       const lab = mapState.labels ? `<text class="node-lab" x="${p._x}" y="${p._y + p._r + 12}" text-anchor="middle">${esc(p.short.slice(0, 8))}</text>` : '';
@@ -1586,7 +1626,7 @@
             <text x="${L.W / 2}" y="${L.H / 2 + 31}" text-anchor="middle" font-size="9.5"
                   font-family="var(--mono)" fill="#666e90" style="pointer-events:none">${modules.length} 模块 · ${points.length} 考点 · ${meta.questionCount} 题</text>
           </g>` : ''}
-          <g>${edges}</g><g>${hubs}</g><g>${nodes}</g>
+          <g>${edges}</g><g>${hubs}</g><g>${nodes}</g><g>${hubLabels}</g><g>${hubNums}</g>
         </g>
       </svg>
       <div class="map-hint">滚轮缩放 · 拖拽平移 · 点击节点</div>
