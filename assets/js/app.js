@@ -680,6 +680,7 @@
         <div class="actions">
           <a class="btn primary" href="#/papers">浏览历届真题 →</a>
           <a class="btn" href="#/map">打开知识地图 ✦</a>
+          <a class="btn" href="#/map?subject=GS">高等数学 ∫</a>
           <a class="btn" href="#/map?subject=LA">线性代数 ▦</a>
           <a class="btn" href="#/map?tab=cards">知识卡片 ◇</a>
           <a class="btn" href="#/syllabus">查看考纲</a>
