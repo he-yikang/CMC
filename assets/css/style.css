@@ -252,10 +252,19 @@ a.chip:hover{color:#fff;border-color:var(--acc);background:rgba(139,123,255,.16)
 .pdf-toolbar .sp{flex:1}
 .pdf-toolbar .mode{font-family:var(--mono);font-size:10.5px;padding:4px 9px;border-radius:7px;
   border:1px solid rgba(139,123,255,.35);background:rgba(139,123,255,.12);color:#b7aaff;white-space:nowrap}
-.pdf-stage{position:relative;overflow:auto;display:flex;justify-content:center;
+.pdf-stage{position:relative;overflow:auto;display:flex;justify-content:flex-start;
   padding:18px;background:#10131f;min-height:320px;
   background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1px);background-size:18px 18px}
 .pdf-stage canvas{background:#fff;box-shadow:0 12px 40px rgba(0,0,0,.55);border-radius:3px;max-width:none;display:block}
+/* canvas 定位容器 + PDF 链接注解层 */
+.pdf-page{position:relative;flex:0 0 auto;margin:0 auto}
+.annot-layer{position:absolute;inset:0;pointer-events:none;z-index:2}
+.annot-layer .pdf-link{position:absolute;display:block;pointer-events:auto;border-radius:2px;
+  background:transparent;transition:background .15s,box-shadow .15s}
+.annot-layer .pdf-link:hover{background:rgba(124,108,255,.26);
+  box-shadow:0 0 0 1px rgba(170,160,255,.8),0 0 12px rgba(124,108,255,.45);cursor:pointer}
+.link-hint{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#8f97b8;
+  border:1px dashed rgba(255,255,255,.18);border-radius:6px;padding:2px 7px;cursor:help;white-space:nowrap}
 .pdf-stage .pdf-msg{margin:auto;text-align:center;color:var(--muted);font-size:12.5px;max-width:340px;line-height:1.8}
 .pdf-stage .pdf-msg b{color:var(--txt);display:block;margin-bottom:6px;font-size:14px}
 

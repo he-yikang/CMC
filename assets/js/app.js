@@ -112,6 +112,19 @@
     return pdfPromise;
   }
 
+  /** 把 PDF 内部跳转目标（命名目标 / 显式页引用）解析成 1-based 页码 */
+  async function destToPage(doc, dest) {
+    try {
+      let d = dest;
+      if (typeof d === 'string') d = await doc.getDestination(d);
+      if (!Array.isArray(d) || !d.length) return null;
+      const ref = d[0];
+      if (typeof ref === 'number') return ref + 1;
+      const idx = await doc.getPageIndex(ref);
+      return idx + 1;
+    } catch (e) { return null; }
+  }
+
   class Viewer {
     constructor(stage, toolbar, canvas, opts = {}) {
       this.stage = stage; this.toolbar = toolbar; this.canvas = canvas;
@@ -119,7 +132,21 @@
       this.ctx = null;   // {mode, questionPage, solutionPage, label, title}
       this.opts = opts;
       this.buildToolbar();
+      this.ensureWrap();
       this.stage.addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); this.setZoom(this.zoom + (e.deltaY > 0 ? -.1 : .1)); } }, { passive: false });
+    }
+    /** 给 canvas 套一层定位容器，并在其上叠加「PDF 链接注解」层 */
+    ensureWrap() {
+      if (this.wrap) return this.wrap;
+      const wrap = document.createElement('div');
+      wrap.className = 'pdf-page';
+      this.canvas.parentNode.insertBefore(wrap, this.canvas);
+      wrap.appendChild(this.canvas);
+      const layer = document.createElement('div');
+      layer.className = 'annot-layer';
+      wrap.appendChild(layer);
+      this.wrap = wrap; this.layer = layer;
+      return wrap;
     }
     buildToolbar() {
       this.toolbar.innerHTML = `
@@ -133,6 +160,7 @@
         <button class="btn sm" data-act="fit">适应宽度</button>
         <span class="sp"></span>
         <span class="mode" id="${this.opts.modeId || 'vmode'}">—</span>
+        <span class="link-hint" title="已启用 PDF 原生内部链接：目录页码、题目页「参考解答(01.1)」与解答页「返回题目(01.1)」编号都可直接点击跳转">🔗 内部链接</span>
         <button class="btn sm" data-act="swap" title="在题目与解答之间跳转">⇄ 切换</button>
         <a class="btn sm" data-act="raw" href="assets/cmc-papers.pdf" target="_blank" rel="noopener">原件 ↗</a>`;
       this.toolbar.addEventListener('click', e => {
@@ -187,6 +215,7 @@
       const msg = this.stage.querySelector('.pdf-msg');
       if (msg) msg.remove();
       this.canvas.style.display = 'none';
+      if (this.layer) this.layer.innerHTML = '';
       try {
         const doc = await loadPdf();
         if (tk !== this.token) return;
@@ -201,14 +230,68 @@
         this.canvas.height = Math.floor(vp.height * dpr);
         this.canvas.style.width = vp.width + 'px';
         this.canvas.style.height = vp.height + 'px';
+        if (this.wrap) { this.wrap.style.width = vp.width + 'px'; this.wrap.style.height = vp.height + 'px'; }
         const c2d = this.canvas.getContext('2d', { alpha: false });
         c2d.setTransform(dpr, 0, 0, dpr, 0, 0);
         c2d.fillStyle = '#fff'; c2d.fillRect(0, 0, vp.width, vp.height);
         await page.render({ canvasContext: c2d, viewport: vp }).promise;
         if (tk === this.token) this.canvas.style.display = 'block';
+        await this.renderLinks(doc, page, vp, tk);
       } catch (err) {
         if (/Rendering cancelled/i.test(String(err && err.message))) return;
         this.fail(tk, err);
+      }
+    }
+    /**
+     * 渲染 PDF 的链接注解层。
+     * pdf.js 只画页面内容，不画 /Annots；这份真题 PDF 的目录页码、
+     * 「参考解答(01.1)」「返回题目(01.1)」都是 LINK_GOTO 注解，
+     * 因此需要按 page.getAnnotations() 手工铺一层可点的透明热区。
+     */
+    async renderLinks(doc, page, vp, tk) {
+      if (!this.layer) return;
+      let annots = [];
+      try { annots = await page.getAnnotations({ intent: 'display' }); } catch (e) { return; }
+      if (tk !== this.token) return;
+      const frag = document.createDocumentFragment();
+      let n = 0;
+      for (const a of annots) {
+        if (a.subtype !== 'Link') continue;
+        const rect = a.rect;
+        if (!Array.isArray(rect) || rect.length !== 4) continue;
+        let v = rect;
+        try { v = vp.convertToViewportRectangle(rect); } catch (e) { continue; }
+        // 目录里的页码链接在 PDF 中只有约 4pt 宽，直接铺会小到点不中，这里做适度放大
+        const PAD_X = 4, PAD_Y = 1.5, MIN_W = 18, MIN_H = 10;
+        let left = Math.min(v[0], v[2]) - PAD_X;
+        let top = Math.min(v[1], v[3]) - PAD_Y;
+        let w = Math.abs(v[2] - v[0]) + PAD_X * 2;
+        let h = Math.abs(v[3] - v[1]) + PAD_Y * 2;
+        if (w < 2 || h < 2) continue;
+        if (w < MIN_W) { left -= (MIN_W - w) / 2; w = MIN_W; }
+        if (h < MIN_H) { top -= (MIN_H - h) / 2; h = MIN_H; }
+        const el = document.createElement('a');
+        el.className = 'pdf-link';
+        el.style.cssText = `left:${left.toFixed(2)}px;top:${top.toFixed(2)}px;width:${w.toFixed(2)}px;height:${h.toFixed(2)}px`;
+        if (a.url) {
+          el.href = a.url; el.target = '_blank'; el.rel = 'noopener';
+          el.title = a.url;
+        } else if (a.dest != null) {
+          el.href = 'javascript:void(0)';
+          el.title = 'PDF 内部跳转';
+          el.addEventListener('click', async ev => {
+            ev.preventDefault(); ev.stopPropagation();
+            const p = await destToPage(doc, a.dest);
+            if (p) { this.go(p); toast(`PDF 内部链接 → 第 ${p} 页`); }
+            else toast('该链接目标无法解析');
+          });
+        } else continue;
+        frag.appendChild(el); n++;
+      }
+      if (tk === this.token) {
+        this.layer.innerHTML = '';
+        this.layer.appendChild(frag);
+        this.layer.dataset.count = n;
       }
     }
   }
