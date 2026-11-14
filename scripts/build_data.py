@@ -424,6 +424,8 @@ def parse_questions(doc, papers, sol_of, q_of):
 #   解答页  「返回题目(01.2)」→ 该题解答从这里开始
 # 一道题可能横跨多页，因此输出的是「段」列表：[[页码, y0, y1], ...]
 PX0, PX1 = 50.0, 548.0      # 正文横向范围（版心）
+THUMB_H = 152.0            # 卡片小图预览的高度（PDF pt）
+THUMB_H_S = 88.0           # 表格行内小图预览的高度（PDF pt）
 BODY_TOP, BODY_BOT = 86.0, 795.0
 
 
@@ -498,6 +500,21 @@ def build_boxes(doc, papers, questions):
         b = boxes.get(q["id"], {})
         q["qSegs"] = b.get("q", [])
         q["sSegs"] = b.get("s", [])
+        # 小图预览：只取题目最上面若干磅，且切在行底，避免把一行截成两半
+        segs = q["qSegs"]
+        q["thumb"] = q["thumbS"] = []
+        if segs:
+            p, y0, y1 = segs[0]
+
+            def snap(limit):
+                limit = min(y1, y0 + limit)
+                rows = [b for a, b, _t in body(p) if a >= y0 - 1 and b <= limit + 5]
+                if rows:
+                    limit = min(y1, max(rows) + 3)
+                return [p, y0, round(limit, 1)]
+
+            q["thumb"] = snap(THUMB_H)
+            q["thumbS"] = snap(THUMB_H_S)
     return questions
 
 

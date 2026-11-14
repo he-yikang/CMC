@@ -132,33 +132,70 @@
   // 这里把对应页面按固定倍率渲染一次并缓存，再从中裁出该题的横条，
   // 跨页的题目会自动拼成多段竖排，因此不会再看到整页、也不会出现文本乱码。
   const CROP_X0 = 50, CROP_X1 = 548;      // 版心横向范围（与 build_data.py 一致）
-  const PAGE_SCALE = 2.2;                 // 页面缓存渲染倍率
-  const PAGE_CACHE_MAX = 8;
+  const PAGE_SCALE = 2.0;                 // 页面缓存渲染倍率
+  const PAGE_CACHE_MAX = 6;
   let PAGE_W_PT = 595.28;
   const pageCache = new Map();
+  const pageJobs = new Map();
 
   async function pageCanvas(pno) {
     const hit = pageCache.get(pno);
     if (hit) { hit.t = Date.now(); return hit.c; }
-    const doc = await loadPdf();
-    const page = await doc.getPage(pno);
-    const base = page.getViewport({ scale: 1 });
-    PAGE_W_PT = base.width;
-    const vp = page.getViewport({ scale: PAGE_SCALE });
-    const c = document.createElement('canvas');
-    c.width = Math.ceil(vp.width);
-    c.height = Math.ceil(vp.height);
-    const g = c.getContext('2d', { alpha: false });
-    g.fillStyle = '#fff';
-    g.fillRect(0, 0, c.width, c.height);
-    await page.render({ canvasContext: g, viewport: vp }).promise;
-    pageCache.set(pno, { c, t: Date.now() });
-    if (pageCache.size > PAGE_CACHE_MAX) {
-      let oldest = null;
-      for (const kv of pageCache) if (!oldest || kv[1].t < oldest[1].t) oldest = kv;
-      if (oldest) pageCache.delete(oldest[0]);
+    if (pageJobs.has(pno)) return pageJobs.get(pno);   // 同一页只渲染一次
+    const job = (async () => {
+      const doc = await loadPdf();
+      const page = await doc.getPage(pno);
+      const base = page.getViewport({ scale: 1 });
+      PAGE_W_PT = base.width;
+      const vp = page.getViewport({ scale: PAGE_SCALE });
+      const c = document.createElement('canvas');
+      c.width = Math.ceil(vp.width);
+      c.height = Math.ceil(vp.height);
+      const g = c.getContext('2d', { alpha: false });
+      g.fillStyle = '#fff';
+      g.fillRect(0, 0, c.width, c.height);
+      await page.render({ canvasContext: g, viewport: vp }).promise;
+      pageCache.set(pno, { c, t: Date.now() });
+      if (pageCache.size > PAGE_CACHE_MAX) {
+        let oldest = null;
+        for (const kv of pageCache) if (!oldest || kv[1].t < oldest[1].t) oldest = kv;
+        if (oldest) pageCache.delete(oldest[0]);
+      }
+      pageJobs.delete(pno);
+      return c;
+    })().catch(err => { pageJobs.delete(pno); throw err; });
+    pageJobs.set(pno, job);
+    return job;
+  }
+
+  /** 列表里的小图预览：从页面缓存里裁一段画进卡片 */
+  let thumbChain = Promise.resolve();
+  function queueThumb(cv) {
+    thumbChain = thumbChain.then(() => drawThumb(cv)).catch(() => {});
+    return thumbChain;
+  }
+  async function drawThumb(cv) {
+    const box = cv.parentElement;
+    if (!box || box.dataset.done) return;
+    const [p, y0, y1] = String(cv.dataset.thumb || '').split(',').map(Number);
+    if (!p || !isFinite(y0) || !isFinite(y1) || y1 <= y0) return;
+    try {
+      const src = await pageCanvas(p);
+      const k = src.width / PAGE_W_PT;
+      const sw = (CROP_X1 - CROP_X0) * k;
+      const sh = (y1 - y0) * k;
+      cv.width = Math.max(1, Math.round(sw));
+      cv.height = Math.max(1, Math.round(sh));
+      const g = cv.getContext('2d', { alpha: false });
+      g.fillStyle = '#fff';
+      g.fillRect(0, 0, cv.width, cv.height);
+      g.drawImage(src, CROP_X0 * k, y0 * k, sw, sh, 0, 0, cv.width, cv.height);
+      box.dataset.done = '1';
+      box.classList.add('ready');
+    } catch (e) {
+      box.dataset.done = '1';
+      box.classList.add('failed');
     }
-    return c;
   }
 
   /** 把若干段 [页, y0, y1] 依次画成画布，竖排进 host */
@@ -246,8 +283,12 @@
     await renderSegs(host.querySelector('#sqS'), q.sSegs, host, token);
     if (host.__sqTok !== token) return;
     if (mode === 'question' || mode === 'solution') {
+      // 只在容器内部滚动，不要用 scrollIntoView —— 那会把整个页面也带着跳走
       const el = host.querySelector(`[data-block="${mode === 'solution' ? 's' : 'q'}"]`);
-      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      if (el && host.scrollTo) {
+        const top = el.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop - 8;
+        host.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      }
     } else if (host.scrollTo) {
       host.scrollTo({ top: 0 });
     }
@@ -518,18 +559,43 @@
       </div>
     </a>`;
   }
+  /** 卡片 / 表格里的原卷小图。文本抽取会把公式拆散，所以题目一律用裁切图。 */
+  function thumbHTML(q, key = 'thumb', cls = '') {
+    return `<div class="qi-pv ${cls}" title="点击看完整题目">
+      <canvas data-thumb="${(q[key] || []).join(',')}"></canvas>
+      <div class="qi-pv-fb">${esc(q.excerpt)}</div>
+    </div>`;
+  }
+
+  let thumbIO = null;
+  function observeThumbs(root) {
+    const list = $$('canvas[data-thumb]', root || document);
+    if (!list.length) return;
+    if (!window.IntersectionObserver) { list.forEach(queueThumb); return; }
+    if (!thumbIO) {
+      thumbIO = new IntersectionObserver(es => {
+        es.forEach(en => {
+          if (!en.isIntersecting) return;
+          thumbIO.unobserve(en.target);
+          queueThumb(en.target);
+        });
+      }, { rootMargin: '300px 0px' });
+    }
+    list.forEach(c => { if (!c.parentElement.dataset.done) thumbIO.observe(c); });
+  }
+
   function questionRows(qs, tableId, attr) {
     if (!qs.length) {
       return `<div class="card" id="${tableId}"><div class="empty" style="padding:36px 20px">
         <span class="big">◌</span>该条目在 2009–2026 的 42 套试卷中未被单独命中</div></div>`;
     }
     return `<div class="card" id="${tableId}" style="padding:6px 14px">
-      <table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题型</th><th>题干摘要</th><th>考点</th><th>题目页</th><th>解答页</th></tr></thead>
+      <table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题型</th><th>题目</th><th>考点</th><th>题目页</th><th>解答页</th></tr></thead>
       <tbody>${qs.map(q => `<tr>
         <td><a href="#/paper/${pad2(q.paperId)}?q=${q.id}" class="mono">${q.id}</a>${q.subLabel ? ` <span class="tl-sub">${esc(q.subLabel)}</span>` : ''}</td>
         <td>${q.year} ${esc(P[pad2(q.paperId)].short)}</td>
         <td><span class="badge type">${q.type}</span></td>
-        <td style="max-width:340px">${esc(q.excerpt.slice(0, 62))}</td>
+        <td style="width:300px">${thumbHTML(q, 'thumbS', 'mini')}</td>
         <td>${topicChips(q, 2)}</td>
         <td><button class="btn sm" ${attr}="${q.id}" data-m="question">P${q.questionPage}</button></td>
         <td><button class="btn sm" ${attr}="${q.id}" data-m="solution">P${q.solutionPage}</button></td>
@@ -753,7 +819,7 @@
                 ${q.points ? `<span class="badge">${q.points} 分</span>` : ''}
                 <span class="qi-pages">P${q.questionPage} → P${q.solutionPage}</span>
               </div>
-              <div class="qi-excerpt" title="${esc(q.excerpt)}">${esc(q.excerpt)}</div>
+              ${thumbHTML(q, 'thumb')}
               ${topicChips(q, 2)}
               ${q.cardIds && q.cardIds.length ? `<div class="chips" style="margin-top:6px">${q.cardIds.slice(0, 2).map(c => cardChip(c)).join('')}</div>` : ''}
               <div class="qi-actions" style="margin-top:9px">
@@ -779,6 +845,8 @@
         </div>
       </div>`;
 
+    observeThumbs($('#qList'));
+
     const v = new Viewer($('#inlineStage'), $('#inlineToolbar'), $('#inlineCanvas'), { modeId: 'inlineMode' });
     let pvMode = 'crop';
     let current = null;
@@ -790,6 +858,13 @@
       $('#inlinePageWrap').hidden = m !== 'page';
       if (m === 'page' && current) {
         v.go(current.mode === 'solution' ? current.q.solutionPage : current.q.questionPage, qCtx(current.q, current.mode));
+      }
+    };
+    // 窄屏是上下堆叠：点完卡片要跳到下面的阅读区，否则看起来像没反应
+    const jumpToViewer = () => {
+      if (window.matchMedia && window.matchMedia('(max-width:1200px)').matches) {
+        const box = $('#qViewer');
+        if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     };
     const select = (qid, mode) => {
@@ -805,9 +880,11 @@
       if (b) {
         if (b.dataset.drawer) { openQuestion(Q[b.dataset.drawer], 'question'); return; }
         select(b.dataset.open, b.dataset.mode);
+        jumpToViewer();
         return;
       }
       select(item.dataset.q, 'both');
+      jumpToViewer();
     });
     $('#pvToggle').addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
@@ -820,7 +897,7 @@
       v.go(p.questionPage, null);
     });
     const initial = (focusQid && Q[focusQid] && Q[focusQid].paperId === p.id) ? focusQid : qs[0].id;
-    select(initial, 'question');
+    select(initial, 'both');
     if (initial === focusQid) {
       setTimeout(() => {
         const item = $(`.q-item[data-q="${initial}"]`);
@@ -913,7 +990,7 @@
         <div class="stack" style="gap:6px">${qs.slice(0, 40).map(q => `
           <div class="topic-link">
             <span class="tl-id">${q.id}${q.subLabel ? `<i class="tl-sub">${esc(q.subLabel)}</i>` : ''}</span>
-            <span class="tl-ex">${esc(q.excerpt.slice(0, 26))}</span>
+            <span class="tl-ex">${esc(q.heading || q.type)}</span>
             <button class="btn sm" data-sq="${q.id}" data-sm="question" title="打开题目页">题</button>
             <button class="btn sm" data-sq="${q.id}" data-sm="solution" title="打开解答页">解</button>
           </div>`).join('') || '<div class="small muted">暂无关联试题</div>'}</div>
@@ -1312,6 +1389,7 @@
       <div class="section-title">关联试题 <span class="n">${qs.length} 道 · 点击直接跳转到 PDF 原页</span></div>
       ${questionRows(qs, 'topicTable', 'data-openq')}`;
     bindQuestionRows('topicTable', 'data-openq');
+    observeThumbs($('#topicTable'));
   }
 
   /* ----------------------------- 视图：知识卡片详情 ----------------------------- */
@@ -1368,6 +1446,7 @@
         ◇ 同模块其他卡片：<div class="chips" style="margin-top:8px">${cards.filter(x => x.moduleId === c.moduleId && x.id !== c.id).slice(0, 14).map(x => cardChip(x.id)).join('')}</div>
       </div></div>`;
     bindQuestionRows('cardTable', 'data-openq');
+    observeThumbs($('#cardTable'));
   }
 
   /* ----------------------------- 视图：考纲全文 ----------------------------- */
@@ -1514,21 +1593,24 @@
         <div class="card"><div class="chips">${hitT.slice(0, 40).map(p => `<a class="chip" href="#/topic/${p.id}"><i class="dot" style="background:${p.color}"></i>${esc(p.short)} · ${cnt(p.id)} 题</a>`).join('')}</div></div>` : ''}
       ${hitP.length ? `<div class="section-title">试卷 <span class="n">${hitP.length}</span></div><div class="paper-grid">${hitP.slice(0, 12).map(paperCard).join('')}</div>` : ''}
       ${hitQ.length ? `<div class="section-title">试题 <span class="n">${hitQ.length}</span></div>
-        <div class="card" id="searchTable" style="padding:6px 14px"><table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>摘要</th><th>考点</th><th>题目</th><th>解答</th></tr></thead>
+        <div class="card" id="searchTable" style="padding:6px 14px"><table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题目</th><th>考点</th><th>题目</th><th>解答</th></tr></thead>
         <tbody>${hitQ.slice(0, 150).map(x => `<tr>
           <td><a class="mono" href="#/paper/${pad2(x.paperId)}?q=${x.id}">${x.id}</a></td>
           <td class="small">${x.year} ${esc(P[pad2(x.paperId)].short)}</td>
-          <td style="max-width:380px">${esc(x.excerpt.slice(0, 70))}</td>
+          <td style="width:320px">${thumbHTML(x, 'thumbS', 'mini')}</td>
           <td>${topicChips(x, 2)}</td>
           <td><button class="btn sm" data-sq="${x.id}" data-sm="question">P${x.questionPage}</button></td>
           <td><button class="btn sm" data-sq="${x.id}" data-sm="solution">P${x.solutionPage}</button></td>
         </tr>`).join('')}</tbody></table></div>` : ''}
       ${q && !hitQ.length && !hitP.length && !hitT.length && !hitC.length ? '<div class="empty"><span class="big">◌</span>没有匹配结果，试试「中值定理」「格林」「幂级数」「矩阵」等关键词</div>' : ''}`;
     const st = $('#searchTable');
-    if (st) st.addEventListener('click', e => {
-      const b = e.target.closest('[data-sq]'); if (!b) return;
-      openQuestion(Q[b.dataset.sq], b.dataset.sm);
-    });
+    if (st) {
+      observeThumbs(st);
+      st.addEventListener('click', e => {
+        const b = e.target.closest('[data-sq]'); if (!b) return;
+        openQuestion(Q[b.dataset.sq], b.dataset.sm);
+      });
+    }
   }
 
   /* ----------------------------- 路由 ----------------------------- */
