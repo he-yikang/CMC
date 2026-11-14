@@ -731,6 +731,285 @@
   }
 
   /* ----------------------------- 视图：总览 ----------------------------- */
+
+  /* --------------------- 首页 Hero：动态数学视觉层 ---------------------
+     一层实时渲染的 canvas：粒子网络 + 漂浮公式碎片（科技感），
+     单位圆动点 / 李萨如曲线 / 流动正弦波 / 刻度环（数学感）。
+     文字所在左半区自动压淡，右上角可暂停； prefers-reduced-motion 只画静态一帧。
+     -------------------------------------------------------------------- */
+  const HeroFX = (() => {
+    let canvas = null, ctx = null, raf = 0, ro = null, running = false;
+    let W = 1, H = 1, dpr = 1, t0 = 0, last = 0, clock = 0;
+    let particles = [], glyphs = [], trail = [];
+    let mouse = { x: 0, y: 0 }, onMove = null;
+
+    const V = [139, 123, 255], B = [77, 141, 255], C = [86, 224, 208];
+    const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+    const GLYPHS = ['∑', '∫', '∂', '∇', 'π', '∞', '√', '∆', 'λ', 'θ', '∮', '⊕',
+      '⊗', '∀', '∃', '≈', '∈', '⊂', 'ℝ', 'ℂ', 'lim', 'det A', 'f(x)',
+      'π²/6', '∂²u/∂t²', '|A|', 'n→∞', '∇×F'];
+    const rnd = (a, b) => a + Math.random() * (b - a);
+
+    function seed() {
+      const compact = W < 700;
+      particles = Array.from({ length: compact ? 13 : 30 }, () => ({
+        x: rnd(0, W), y: rnd(0, H), vx: rnd(-0.16, 0.16), vy: rnd(-0.13, 0.13),
+        r: rnd(0.9, 2.0), c: [V, B, C][Math.floor(rnd(0, 3))]
+      }));
+      glyphs = Array.from({ length: compact ? 0 : 18 }, (_, i) => ({
+        x: rnd(W * 0.46, W * 0.98), y: rnd(-H, H), v: rnd(4, 11), s: rnd(13, 22),
+        g: GLYPHS[(i * 3 + 1) % GLYPHS.length], ph: rnd(0, 6.28),
+        a: rnd(0.24, 0.44), c: [V, B, C][i % 3]
+      }));
+      trail = [];
+    }
+
+    function resize() {
+      if (!canvas || !ctx) return;
+      const box = canvas.getBoundingClientRect();
+      W = Math.max(1, box.width); H = Math.max(1, box.height);
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      seed();
+      draw(clock);
+    }
+
+    // 左侧是标题/正文区，把所有前景元素的透明度压到很低
+    function fade(x) {
+      const u = x / W;
+      if (u <= 0.42) return 0.10;
+      if (u >= 0.74) return 1;
+      return 0.10 + 0.9 * (u - 0.42) / 0.32;
+    }
+
+    function ring(cx, cy, r, rot, dash, col, a) {
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
+      ctx.setLineDash(dash); ctx.strokeStyle = rgba(col, a); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.2832); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+    }
+
+    function glowDot(x, y, r, col, a) {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r * 5);
+      g.addColorStop(0, rgba(col, a)); g.addColorStop(1, rgba(col, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r * 5, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = rgba(col, Math.min(1, a + 0.1));
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill();
+    }
+
+    function draw(t) {
+      if (!ctx) return;
+      ctx.clearRect(0, 0, W, H);
+      const compact = W < 700;
+      const px = mouse.x * (compact ? 3 : 9), py = mouse.y * (compact ? 2 : 6);
+
+      // 1) 缓慢漂移的细网格
+      const step = 38, ox = (t * 5) % step, oy = (t * 2.6) % step;
+      ctx.lineWidth = 1;
+      for (let x = -step + ox; x < W + step; x += step) {
+        ctx.strokeStyle = rgba(V, 0.035 * (0.3 + 0.7 * fade(x)));
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = -step + oy; y < H + step; y += step) {
+        ctx.strokeStyle = rgba(B, 0.026);
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+
+      // 2) 粒子网络：近距连线 + 发光节点
+      const link = compact ? 96 : 116;
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < -8) p.x = W + 8; else if (p.x > W + 8) p.x = -8;
+        if (p.y < -8) p.y = H + 8; else if (p.y > H + 8) p.y = -8;
+        for (let j = i + 1; j < particles.length; j++) {
+          const q = particles[j], dx = p.x - q.x, dy = p.y - q.y;
+          const d = Math.hypot(dx, dy);
+          if (d < link) {
+            ctx.strokeStyle = rgba(B, (1 - d / link) * 0.14 * fade((p.x + q.x) / 2));
+            ctx.lineWidth = 0.7;
+            ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+          }
+        }
+      }
+      for (const p of particles) {
+        const a = 0.5 * fade(p.x) + 0.05;
+        ctx.fillStyle = rgba(p.c, a);
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+        ctx.fillStyle = rgba(p.c, a * 0.14);
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 4.5, 0, 6.2832); ctx.fill();
+      }
+
+      // 3) 缓缓上浮的数学符号 / 公式碎片
+      ctx.textBaseline = 'middle';
+      for (const g of glyphs) {
+        const span = H + 90;
+        const y = ((g.y - t * g.v) % span + span) % span - 45;
+        const x = g.x + Math.sin(t * 0.35 + g.ph) * 12;
+        const life = Math.max(0, Math.min(1, Math.min(y + 45, H + 45 - y) / 55));
+        if (life <= 0) continue;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.sin(t * 0.25 + g.ph) * 0.09);
+        ctx.font = `500 ${g.s}px "Cambria Math", "Segoe UI Symbol", ui-monospace, Consolas, monospace`;
+        ctx.shadowColor = rgba(g.c, 0.55); ctx.shadowBlur = 7;
+        ctx.fillStyle = rgba(g.c, g.a * life * fade(x));
+        ctx.fillText(g.g, 0, 0);
+        ctx.restore();
+      }
+
+      // 4) 右侧「数学仪表盘」：坐标轴、同心环、刻度、正弦波、李萨如曲线、单位圆动点
+      const cx = W * (compact ? 0.82 : 0.86) + px;
+      const cy = H * (compact ? 0.17 : 0.46) + py;
+      const R = compact ? 54 : Math.min(H * 0.38, 120);
+      const k = compact ? 0.32 : 1;
+
+      ctx.strokeStyle = rgba(V, 0.09 * k); ctx.setLineDash([3, 6]);
+      ctx.beginPath(); ctx.moveTo(cx - R * 1.45, cy); ctx.lineTo(cx + R * 1.45, cy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx, cy - R * 1.45); ctx.lineTo(cx, cy + R * 1.45); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 公式水印：缓慢呼吸，位置固定在右侧非文字区（窄屏无留白，跳过）
+      const wm = 0.20 + 0.10 * (0.5 + 0.5 * Math.sin(t * 0.7));
+      if (!compact) {
+      ctx.font = '500 13px "Cambria Math", "Segoe UI Symbol", ui-monospace, Consolas, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = rgba(C, wm * k);
+      ctx.fillText('∑ 1/n² = π²/6    ·    ∮ f(z)dz', cx, Math.max(24, cy - R * 1.15));
+      ctx.textAlign = 'left';
+      }
+
+      ring(cx, cy, R, t * 0.12, [2, 8], V, 0.32 * k);
+      ring(cx, cy, R * 0.76, -t * 0.22, [1, 13], C, 0.40 * k);
+
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * 0.05);
+      for (let i = 0; i < 60; i++) {
+        const a = i * Math.PI / 30, long = i % 5 === 0;
+        const r0 = R * 1.06, r1 = R * (long ? 1.15 : 1.10);
+        ctx.strokeStyle = rgba(V, (long ? 0.46 : 0.22) * k);
+        ctx.lineWidth = long ? 1.2 : 0.7;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+        ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      for (let m = 0; m < 2; m++) {
+        const amp = R * (m ? 0.30 : 0.42), freq = (m ? 2.3 : 1.6) * Math.PI / R;
+        ctx.strokeStyle = rgba(m ? V : C, (m ? 0.13 : 0.24) * k);
+        ctx.lineWidth = m ? 1 : 1.3;
+        ctx.beginPath();
+        for (let xx = -R * 1.4; xx <= R * 1.4; xx += 2) {
+          const yy = Math.sin(freq * xx + t * (m ? -0.9 : 1.2) + m * 1.4) * amp;
+          if (xx === -R * 1.4) ctx.moveTo(cx + xx, cy + yy);
+          else ctx.lineTo(cx + xx, cy + yy);
+        }
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = rgba(B, 0.22 * k); ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i <= 220; i++) {
+        const u = i / 220 * Math.PI * 2;
+        const x = cx + R * 0.58 * Math.sin(3 * u + t * 0.32);
+        const y = cy + R * 0.50 * Math.sin(2 * u);
+        if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      const ang = t * 0.6, rr = R * 0.76;
+      const dxp = Math.cos(ang) * rr, dyp = Math.sin(ang) * rr;
+      ctx.strokeStyle = rgba(C, 0.30 * k); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + dxp, cy + dyp); ctx.stroke();
+      ctx.strokeStyle = rgba(V, 0.20 * k); ctx.setLineDash([2, 4]);
+      ctx.beginPath(); ctx.moveTo(cx + dxp, cy + dyp); ctx.lineTo(cx + dxp, cy); ctx.lineTo(cx, cy); ctx.stroke();
+      ctx.setLineDash([]);
+
+      trail.push([cx + dxp, cy + dyp]);
+      if (trail.length > 46) trail.shift();
+      ctx.lineWidth = 1.4;
+      for (let i = 1; i < trail.length; i++) {
+        ctx.strokeStyle = rgba(C, (i / trail.length) * 0.30 * k);
+        ctx.beginPath(); ctx.moveTo(trail[i - 1][0], trail[i - 1][1]); ctx.lineTo(trail[i][0], trail[i][1]); ctx.stroke();
+      }
+      glowDot(cx + dxp, cy + dyp, 3.2, C, 0.9 * k);
+      glowDot(cx, cy, 2 + Math.sin(t * 2.2) * 0.8, V, 0.7 * k);
+
+      const sx = ((t * 78) % (R * 2.8)) - R * 1.4;
+      const sy = Math.sin(1.6 * Math.PI / R * sx + t * 1.2) * R * 0.42;
+      glowDot(cx + sx, cy + sy, 2.4, C, 0.75 * k);
+
+      // 5) 极淡的扫描光带
+      const scanY = ((t * 20) % (H + 120)) - 60;
+      const grd = ctx.createLinearGradient(0, scanY - 34, 0, scanY + 34);
+      grd.addColorStop(0, rgba(C, 0));
+      grd.addColorStop(0.5, rgba(C, 0.028 * k));
+      grd.addColorStop(1, rgba(C, 0));
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, scanY - 34, W, 68);
+    }
+
+    function loop(now) {
+      if (!running) return;
+      raf = requestAnimationFrame(loop);
+      if (now - last < 24) return;            // ~40fps，动画本就缓慢，省电
+      last = now;
+      clock = (now - t0) / 1000;
+      draw(clock);
+    }
+
+    function onVis() {
+      if (document.hidden) { if (raf) cancelAnimationFrame(raf); raf = 0; }
+      else if (running && !raf) { t0 = performance.now() - clock * 1000; raf = requestAnimationFrame(loop); }
+    }
+
+    function pause() { running = false; if (raf) cancelAnimationFrame(raf); raf = 0; }
+    function resume() {
+      if (running) return;
+      running = true; t0 = performance.now() - clock * 1000; last = 0;
+      raf = requestAnimationFrame(loop);
+    }
+    function toggle() { running ? pause() : resume(); return running; }
+
+    function start(cv) {
+      stop();
+      if (!cv) return;
+      canvas = cv; ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      t0 = performance.now(); last = 0; clock = 0;
+      mouse = { x: 0, y: 0 };
+      resize();
+      ro = new ResizeObserver(resize); ro.observe(canvas);
+      onMove = e => {
+        const b = canvas.getBoundingClientRect();
+        mouse.x = (e.clientX - b.left) / b.width * 2 - 1;
+        mouse.y = (e.clientY - b.top) / b.height * 2 - 1;
+      };
+      window.addEventListener('mousemove', onMove, { passive: true });
+      document.addEventListener('visibilitychange', onVis);
+      const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduced) { draw(0); return; }        // 尊重系统「减少动态效果」
+      running = true;
+      raf = requestAnimationFrame(loop);
+    }
+
+    function stop() {
+      running = false;
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      if (ro) { ro.disconnect(); ro = null; }
+      if (onMove) { window.removeEventListener('mousemove', onMove); onMove = null; }
+      document.removeEventListener('visibilitychange', onVis);
+      canvas = null; ctx = null; particles = []; glyphs = []; trail = [];
+    }
+
+    return { start, stop, toggle, isRunning: () => running };
+  })();
+
   function viewHome() {
     setNav('home'); crumb([{ t: '总览' }]);
     const byYear = {};
@@ -746,6 +1025,8 @@
 
     $view.innerHTML = `
       <div class="hero">
+        <canvas class="hero-fx" aria-hidden="true"></canvas>
+        <button class="hero-fx-toggle" type="button" title="暂停 / 播放背景动效" aria-label="暂停背景动效">⏸</button>
         <div class="eyebrow">Chinese Mathematics Competitions · Non-Math Track</div>
         <h1>全国大学生数学竞赛<br><em>历届真题 × 考纲知识地图</em></h1>
         <p>第一至第十七届非数学类初赛、补赛与决赛：${meta.paperCount} 套试卷、${meta.questionCount} 道大题，
@@ -822,6 +1103,19 @@
         站点提供逐题跳转、双向索引与全文检索。考点对应由关键词规则自动匹配并做少量人工校正，
         标注依据在每个知识点详情中可见；数学公式请以 PDF 原件为准。</div>
       </div>`;
+
+    const fxCanvas = $view.querySelector('.hero-fx');
+    HeroFX.start(fxCanvas);
+    const fxBtn = $view.querySelector('.hero-fx-toggle');
+    if (fxBtn) {
+      const sync = () => {
+        const on = HeroFX.isRunning();
+        fxBtn.textContent = on ? '⏸' : '▶';
+        fxBtn.setAttribute('aria-label', on ? '暂停背景动效' : '播放背景动效');
+      };
+      sync();
+      fxBtn.addEventListener('click', () => { HeroFX.toggle(); sync(); });
+    }
   }
 
   /* ----------------------------- 视图：试卷库 ----------------------------- */
@@ -1716,6 +2010,7 @@
     const parts = path.split('/').filter(Boolean);
     const params = new URLSearchParams(qs || '');
     $('#tooltip').hidden = true;
+    HeroFX.stop();          // 离开首页即停止动画，不占后台 CPU
     if (!parts.length) viewHome();
     else if (parts[0] === 'papers') viewPapers(params);
     else if (parts[0] === 'paper') {
