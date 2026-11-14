@@ -774,6 +774,8 @@ def build_cards(questions, syllabus):
             "moduleColor": mod_map[raw["moduleId"]]["color"],
             "pointIds": raw["pointIds"],
             "latex": raw["latex"],
+            "latexFull": raw.get("latexFull", ""),   # 详情页用的多行完整公式，不参与 clean_inline
+            "latexFullMobile": raw.get("latexFullMobile", ""),  # 窄屏单列版
             "body": clean_inline(raw.get("body", "")),
             "cond": clean_inline(raw.get("cond", "")),
             "tip": clean_inline(raw.get("tip", "")),

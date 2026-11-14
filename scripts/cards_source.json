@@ -690,7 +690,9 @@
     "M8-07"
    ],
    "latex": "e^{x}=\\sum\\frac{x^{n}}{n!},\\quad \\sin x=\\sum\\frac{(-1)^{n}x^{2n+1}}{(2n+1)!},\\quad \\ln(1+x)=\\sum\\frac{(-1)^{n-1}x^{n}}{n}",
-   "body": "配套：\\cos x=\\sum(-1)^n x^{2n}/(2n)!，(1+x)^{\\alpha}=1+\\alpha x+\\frac{\\alpha(\\alpha-1)}{2!}x^{2}+\\cdots，\\arctan x=\\sum(-1)^n\\frac{x^{2n+1}}{2n+1}。",
+   "latexFull": "\\begin{aligned}e^{x}&=\\sum\\frac{x^{n}}{n!},\\quad &\\sin x&=\\sum\\frac{(-1)^{n}x^{2n+1}}{(2n+1)!},\\\\[6pt]\\cos x&=\\sum\\frac{(-1)^{n}x^{2n}}{(2n)!},\\quad &\\ln(1+x)&=\\sum\\frac{(-1)^{n-1}x^{n}}{n},\\\\[6pt]\\arctan x&=\\sum\\frac{(-1)^{n}x^{2n+1}}{2n+1},\\quad &(1+x)^{\\alpha}&=1+\\alpha x+\\frac{\\alpha(\\alpha-1)}{2!}x^{2}+\\cdots\\end{aligned}",
+   "latexFullMobile": "\\begin{aligned}e^{x}&=\\sum\\frac{x^{n}}{n!}\\\\[5pt]\\sin x&=\\sum\\frac{(-1)^{n}x^{2n+1}}{(2n+1)!}\\\\[5pt]\\cos x&=\\sum\\frac{(-1)^{n}x^{2n}}{(2n)!}\\\\[5pt]\\ln(1+x)&=\\sum\\frac{(-1)^{n-1}x^{n}}{n}\\\\[5pt]\\arctan x&=\\sum\\frac{(-1)^{n}x^{2n+1}}{2n+1}\\\\[5pt](1+x)^{\\alpha}&=1+\\alpha x+\\frac{\\alpha(\\alpha-1)}{2!}x^{2}+\\cdots\\end{aligned}",
+   "body": "六个常用函数的麦克劳林展开式：e^x、sin x、cos x、ln(1+x)、(1+x)^α 与 arctan x；求极限、高阶导数、级数求和时可直接套用。",
    "cond": "ln(1+x)、(1+x)^α 收敛域含 |x|<1；其余在全体实数收敛。",
    "tip": "由展开式系数可直接读出 f^{(n)}(0)=a_n n!，这是高阶导数题的常用解法。",
    "kw": [

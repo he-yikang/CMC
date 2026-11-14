@@ -478,6 +478,9 @@ a.chip:hover{color:#fff;border-color:var(--acc);background:rgba(139,123,255,.16)
 .kcard .kc-math{font-size:.88em;mask-image:linear-gradient(90deg,#000 0,#000 88%,transparent 100%)}
 .kcard .kc-math:hover{mask-image:none}
 .kc-math-big{padding:20px 14px;font-size:1.16em;line-height:2.1;background:rgba(6,8,16,.6)}
+/* 多行完整公式（aligned）：允许换行、去掉 KaTeX display 的额外外边距 */
+.kc-math-big .katex{white-space:normal}
+.kc-math-big .katex-display{margin:0}
 .kc-body{position:relative;margin:0;font-size:11.5px;line-height:1.65;color:var(--txt2);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:38px}
 .kc-foot{position:relative;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
@@ -485,12 +488,15 @@ a.chip:hover{color:#fff;border-color:var(--acc);background:rgba(139,123,255,.16)
 .kc-go{margin-left:auto;color:var(--kc);font-weight:600}
 .kchip{border-color:color-mix(in srgb,var(--txt2) 12%,transparent)}
 .kdetail-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:18px;align-items:start}
+.kdetail-grid>*{min-width:0}          /* 长公式不把网格列撑破 */
+.kc-math-big{max-width:100%}
 .kdetail-main{border-top:2px solid var(--kc)}
 .kc-sec{margin:0 0 14px}
 .kc-sec-t{display:block;font-size:11px;letter-spacing:.06em;color:var(--kc);margin-bottom:5px}
 .kc-sec p{margin:0;font-size:12.5px;line-height:1.8;color:var(--txt2)}
 @media(max-width:1200px){.kdetail-grid{grid-template-columns:1fr}}
 @media(max-width:620px){.kc-stat-row{grid-template-columns:1fr 1fr}.card-wall{grid-template-columns:1fr}}
+@media(max-width:620px){.kc-math-big{font-size:.98em;line-height:1.9;padding:16px 10px}}
 
 /* ---------- table / list ---------- */
 .tbl{width:100%;border-collapse:collapse;font-size:12px}

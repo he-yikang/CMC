@@ -601,13 +601,13 @@
   });
 
   /* ----------------------------- 知识卡片组件 ----------------------------- */
-  function mathHTML(latex, extraClass = '') {
+  function mathHTML(latex, extraClass = '', display = false) {
     if (!latex) return '';
     let inner;
     try {
       if (!window.katex) throw new Error('katex missing');
       inner = window.katex.renderToString(latex,
-        { throwOnError: false, strict: false, displayMode: false, trust: false });
+        { throwOnError: false, strict: false, displayMode: display, trust: false });
     } catch (e) {
       inner = `<code>${esc(latex)}</code>`;
     }
@@ -1832,6 +1832,9 @@
     const years = [...new Set(qs.map(q => q.year))].sort((a, b) => a - b);
     const byYear = years.map(y => ({ label: String(y).slice(2), value: qs.filter(q => q.year === y).length }));
     const hitWords = [...new Set(Object.values(c.hits || {}).flat())].slice(0, 12);
+    // 宽屏两列、窄屏单列，保证六个公式都能完整显示
+    const narrow = window.matchMedia && window.matchMedia('(max-width:620px)').matches;
+    const fullLatex = (narrow && c.latexFullMobile) ? c.latexFullMobile : c.latexFull;
 
     $view.innerHTML = `
       <div class="page-head">
@@ -1850,7 +1853,7 @@
       <div class="kdetail-grid">
         <div class="card kdetail-main" style="--kc:${c.typeColor}">
           <div class="card-head"><h2>公式 / 结论</h2><span class="hint">KaTeX 排版</span></div>
-          ${mathHTML(c.latex, 'kc-math-big')}
+          ${mathHTML(fullLatex || c.latex, 'kc-math-big', !!fullLatex)}
           <div class="divider"></div>
           <div class="kc-sec"><span class="kc-sec-t">条件与适用</span><p>${esc(c.cond) || '—'}</p></div>
           <div class="kc-sec"><span class="kc-sec-t">使用提示 / 易错点</span><p>${esc(c.tip) || '—'}</p></div>
