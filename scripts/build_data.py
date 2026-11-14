@@ -4,15 +4,15 @@ CMC 站点数据生成脚本
 --------------------------------
 输入:
   assets/cmc-papers.pdf       （《全国大学生数学竞赛历届真题与详解》第一至第十七届）
-  scripts/syllabus_source.json（由 CMC非数A高数考纲.docx 逐条转录的考纲 + 关键词规则）
+  scripts/syllabus_source.json（高数 / 线代两套考纲的逐条转录 + 关键词规则）
   scripts/cards_source.json   （公式 / 定理 / 性质 / 解题方法 知识卡片库）
 输出:
   assets/data/papers.json      42 套试卷元数据
   assets/data/questions.json   272 道大题（题干、解答摘要、双向页码、考点、关联卡片）
-  assets/data/syllabus.json    8 大考纲模块 + 1 补充模块 / 62 + 2 个知识点
+  assets/data/syllabus.json    高等数学 9 模块 + 线性代数 6 模块 / 90 个知识点
   assets/data/topics.json      知识点 -> 试题的映射与统计
-  assets/data/cards.json       94 张知识卡片及其关联真题
-  assets/data/meta.json        汇总信息
+  assets/data/cards.json       98 张知识卡片及其关联真题
+  assets/data/meta.json        汇总信息（含按学科的统计）
 
 重新生成:  python scripts/build_data.py
 依赖:      pip install pymupdf
@@ -87,30 +87,30 @@ OVERRIDES = {
 # sub 表示该大题中真正属于线性代数的小题（填空题「一」含多个小题）。
 # ---------------------------------------------------------------------------
 LINALG = {
-    "28.1": {"sub": "一(4)", "points": ["M10-01", "M10-02"]},
-    "28.6": {"sub": "六",   "points": ["M10-05"]},
-    "29.1": {"sub": "一(3)", "points": ["M10-01"]},
-    "29.3": {"sub": "三",   "points": ["M10-04"]},
-    "30.1": {"sub": "一(4)", "points": ["M10-04", "M10-03"]},
-    "30.4": {"sub": "四",   "points": ["M10-02"]},
-    "31.1": {"sub": "一(3)", "points": ["M10-02"]},
-    "31.5": {"sub": "五",   "points": ["M10-03"]},
-    "32.1": {"sub": "一(5)", "points": ["M10-03"]},
-    "33.1": {"sub": "一(5)", "points": ["M10-05"]},
-    "33.6": {"sub": "六",   "points": ["M10-04", "M10-02"]},
-    "34.5": {"sub": "五",   "points": ["M10-05", "M10-03"]},
-    "35.1": {"sub": "一(4)", "points": ["M10-01"]},
-    "35.5": {"sub": "五",   "points": ["M10-05", "M10-04"]},
-    "36.7": {"sub": "七",   "points": ["M10-02"]},
-    "37.2": {"sub": "二",   "points": ["M10-06"]},
-    "38.5": {"sub": "五",   "points": ["M10-04"]},
-    "39.5": {"sub": "五",   "points": ["M10-05"]},
-    "40.6": {"sub": "六",   "points": ["M10-05"]},
-    "41.5": {"sub": "五",   "points": ["M10-06"]},
-    "42.6": {"sub": "六",   "points": ["M10-06"]},
+    "28.1": {"sub": "一(4)", "points": ["L2-03", "L2-04"]},
+    "28.6": {"sub": "六",   "points": ["L6-03"]},
+    "29.1": {"sub": "一(3)", "points": ["L2-02"]},
+    "29.3": {"sub": "三",   "points": ["L5-02"]},
+    "30.1": {"sub": "一(4)", "points": ["L5-01", "L1-01"]},
+    "30.4": {"sub": "四",   "points": ["L2-04"]},
+    "31.1": {"sub": "一(3)", "points": ["L2-05", "L2-04"]},
+    "31.5": {"sub": "五",   "points": ["L1-03", "L2-02"]},
+    "32.1": {"sub": "一(5)", "points": ["L1-01"]},
+    "33.1": {"sub": "一(5)", "points": ["L6-01"]},
+    "33.6": {"sub": "六",   "points": ["L5-02", "L2-04"]},
+    "34.5": {"sub": "五",   "points": ["L6-03", "L1-01"]},
+    "35.1": {"sub": "一(4)", "points": ["L2-03"]},
+    "35.5": {"sub": "五",   "points": ["L5-03"]},
+    "36.7": {"sub": "七",   "points": ["L2-04", "L3-04"]},
+    "37.2": {"sub": "二",   "points": ["L6-02"]},
+    "38.5": {"sub": "五",   "points": ["L5-02"]},
+    "39.5": {"sub": "五",   "points": ["L6-03", "L6-01"]},
+    "40.6": {"sub": "六",   "points": ["L6-03"]},
+    "41.5": {"sub": "五",   "points": ["L6-02"]},
+    "42.6": {"sub": "六",   "points": ["L6-02"]},
 }
-# M10 完全由上面的清单驱动，禁止自动打标签，避免把非线代题误挂进来。
-NO_AUTO_MODULES = {"M10"}
+# 线性代数模块完全由上面的清单驱动，禁止自动打标签，避免把非线代题误挂进来。
+NO_AUTO_MODULES = {"L1", "L2", "L3", "L4", "L5", "L6"}
 
 
 def is_noise(line):
@@ -331,12 +331,48 @@ def parse_questions(doc, papers, sol_of, q_of):
 
 
 # --------------------------------------------------------------- 4. 考纲与标注
+def head_of(text):
+    """去掉「（1）」「【补充】」前缀，取第一个分句；括号内的标点不作为断句点。"""
+    s = text.strip()
+    s = re.sub(r"^[（(]\s*\d+\s*[）)]", "", s)
+    s = re.sub(r"^【[^】]*】", "", s).strip()
+    depth = 0
+    for i, ch in enumerate(s):
+        if ch in "（(【[":
+            depth += 1
+        elif ch in "）)】]":
+            depth = max(0, depth - 1)
+        elif depth == 0 and ch in "、，,。.；;：:":
+            head = s[:i].strip()
+            return head or s
+    return s
+
+
+def short_of(text):
+    """列表/标签里用的短名；超长时尽量在标点处断开。"""
+    h = head_of(text)
+    if len(h) <= 18:
+        return h
+    cut = h[:18]
+    for i in range(len(cut) - 1, 8, -1):
+        if cut[i] in " 、，,；;：:（(·":
+            return cut[:i]
+    return cut + "…"
+
+
 def build_syllabus():
     src = json.load(open(SRC_PATH, encoding="utf-8"))
+    subjects = [s["name"] for s in src.get("subjects", [{"name": "高等数学"}])]
+    subj_id = {s["name"]: s.get("id", "") for s in src.get("subjects", [])}
     kps, modules = [], []
+    seq = {s: 0 for s in subjects}          # 学科内模块序号
     for mod in src["modules"]:
+        subj = mod.get("subject", subjects[0])
+        seq[subj] = seq.get(subj, 0) + 1
+        no = seq[subj]
         modules.append({"id": mod["id"], "name": mod["name"],
                         "color": mod["color"], "count": len(mod["items"]),
+                        "subject": subj, "subjectId": subj_id.get(subj, ""), "no": no,
                         "extra": bool(mod.get("extra", False)),
                         "tag": mod.get("tag", ""), "note": mod.get("note", "")})
         for i, item in enumerate(mod["items"], 1):
@@ -353,13 +389,17 @@ def build_syllabus():
                 "id": f'{mod["id"]}-{i:02d}',
                 "moduleId": mod["id"],
                 "moduleName": mod["name"],
+                "moduleNo": no,
+                "subject": subj,
                 "color": mod["color"],
                 "index": i,
                 "text": item["text"].strip(),
-                "short": re.split(r"[、，。（(]", item["text"].strip())[0][:18],
+                "title": head_of(item["text"])[:60],
+                "short": short_of(item["text"]),
                 "keywords": kws,
             })
     return {"title": src["title"], "source": src["source"],
+            "subjects": src.get("subjects", []),
             "modules": modules, "points": kps}
 
 
@@ -552,6 +592,17 @@ def main():
         t["cardIds"] = [c["id"] for c in cards if t["id"] in c["pointIds"]]
 
     extra_mods = {m["id"] for m in syllabus["modules"] if m["extra"]}
+    subj_stats = {}
+    for s in syllabus.get("subjects", []):
+        ids = {m["id"] for m in syllabus["modules"] if m["subject"] == s["name"]}
+        ms = [m for m in syllabus["modules"] if m["id"] in ids]
+        subj_stats[s["name"]] = {
+            "id": s.get("id", ""),
+            "moduleCount": len(ms),
+            "pointCount": sum(m["count"] for m in ms),
+            "questionCount": sum(1 for q in questions
+                                 if any(t.split("-")[0] in ids for t in q["topics"])),
+        }
     meta = {
         "paperCount": len(papers),
         "questionCount": len(questions),
@@ -560,6 +611,7 @@ def main():
         "pointCount": len(syllabus["points"]),
         "officialPointCount": sum(1 for p in syllabus["points"]
                                   if p["moduleId"] not in extra_mods),
+        "subjectStats": subj_stats,
         "linalgQuestionCount": sum(1 for q in questions if q.get("linalg")),
         "cardCount": len(cards),
         "cardTypeCounts": dict(Counter(c["type"] for c in cards)),

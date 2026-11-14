@@ -1,0 +1,4 @@
+# PDF 水印清理脚本产生的备份 / 临时文件
+*.pdf.orig
+*.tmp.pdf
+scripts/__pycache__/

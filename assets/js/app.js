@@ -15,6 +15,7 @@
   const meta     = D.meta;
   const points   = syl.points;
   const modules  = syl.modules;
+  const subjects = syl.subjects || [];
   const cards    = D.cards || [];
   const cardTypes= D.cardTypes || [];
 
@@ -50,7 +51,8 @@
   }
 
   function donut(items, size = 158) {
-    const total = items.reduce((a, b) => a + b.value, 0) || 1;
+    const sum = items.reduce((a, b) => a + b.value, 0);
+    const total = sum || 1;
     const r = size / 2 - 15, C = 2 * Math.PI * r;
     let acc = 0;
     const arcs = items.map(i => {
@@ -66,7 +68,7 @@
         <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="15"/>
         ${arcs}
         <text x="${size / 2}" y="${size / 2 - 3}" text-anchor="middle" fill="#e9ebf7"
-              font-family="var(--mono)" font-size="23" font-weight="600">${total}</text>
+              font-family="var(--mono)" font-size="23" font-weight="600">${sum}</text>
         <text x="${size / 2}" y="${size / 2 + 15}" text-anchor="middle" fill="#727b98" font-size="10">总计</text>
       </svg>
       <div class="donut-legend">${items.map(i => `
@@ -366,6 +368,10 @@
     </a>`;
   }
   function questionRows(qs, tableId, attr) {
+    if (!qs.length) {
+      return `<div class="card" id="${tableId}"><div class="empty" style="padding:36px 20px">
+        <span class="big">◌</span>该条目在 2009–2026 的 42 套试卷中未被单独命中</div></div>`;
+    }
     return `<div class="card" id="${tableId}" style="padding:6px 14px">
       <table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题型</th><th>题干摘要</th><th>考点</th><th>题目页</th><th>解答页</th></tr></thead>
       <tbody>${qs.map(q => `<tr>
@@ -387,6 +393,21 @@
   }
 
   /* ----------------------------- 公共片段 ----------------------------- */
+  function moduleOptions(sel) {
+    if (!subjects.length) {
+      return modules.map(m => `<option value="${m.id}" ${sel === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+    }
+    return subjects.map(s => {
+      const ms = modules.filter(m => m.subject === s.name);
+      if (!ms.length) return '';
+      return `<optgroup label="${esc(s.name)}">` + ms.map(m =>
+        `<option value="${m.id}" ${sel === m.id ? 'selected' : ''}>${m.no}. ${esc(m.name)}</option>`).join('') + '</optgroup>';
+    }).join('');
+  }
+  function subjectList() {
+    return subjects.length ? subjects : [{ id: '', name: '高等数学' }];
+  }
+
   function topicChips(q, limit = 3) {
     return `<div class="chips">${q.topics.slice(0, limit).map(t => {
       const p = PT[t]; if (!p) return '';
@@ -434,13 +455,14 @@
         <div class="eyebrow">Chinese Mathematics Competitions · Non-Math Track</div>
         <h1>全国大学生数学竞赛<br><em>历届真题 × 考纲知识地图</em></h1>
         <p>第一至第十七届非数学类初赛、补赛与决赛：${meta.paperCount} 套试卷、${meta.questionCount} 道大题，
-           按「卷序.题号」双向索引题目与参考解答；并以《CMC 非数 A 高数考纲》的
-           ${meta.officialModuleCount} 个模块 / ${meta.officialPointCount} 个考点为骨架，把每道题挂到知识点上，
-           单列「线性代数」考纲外模块（${meta.linalgQuestionCount} 道决赛真题），
-           再配 ${meta.cardCount} 张公式 / 定理 / 性质 / 解题方法卡片，与真题逐题对应。</p>
+           按「卷序.题号」双向索引题目与参考解答；知识地图并置两套考纲：
+           <b style="color:var(--txt2)">高等数学</b> 9 个模块（${(meta.subjectStats['高等数学'] || {}).pointCount} 个考点）、
+           <b style="color:var(--txt2)">线性代数</b> 6 个模块（${(meta.subjectStats['线性代数'] || {}).pointCount} 个考点），
+           把每道题挂到对应知识点上，并配 ${meta.cardCount} 张公式 / 定理 / 性质 / 解题方法卡片。</p>
         <div class="actions">
           <a class="btn primary" href="#/papers">浏览历届真题 →</a>
           <a class="btn" href="#/map">打开知识地图 ✦</a>
+          <a class="btn" href="#/map?subject=LA">线性代数 ▦</a>
           <a class="btn" href="#/map?tab=cards">知识卡片 ◇</a>
           <a class="btn" href="#/syllabus">查看考纲</a>
         </div>
@@ -450,7 +472,18 @@
         <div class="stat-card" style="--c:#8b7bff"><div class="lab">试卷 / PAPERS</div><div class="val">${meta.paperCount}</div><div class="sub">初赛 · 补赛 · 决赛</div></div>
         <div class="stat-card" style="--c:#4d8dff"><div class="lab">大题 / QUESTIONS</div><div class="val">${meta.questionCount}</div><div class="sub">每题含题目页 + 解答页</div></div>
         <div class="stat-card" style="--c:#26c6da"><div class="lab">届次 / EDITIONS</div><div class="val">${meta.editionCount}</div><div class="sub">${meta.yearMin} – ${meta.yearMax}</div></div>
-        <div class="stat-card" style="--c:#35d0a5"><div class="lab">考纲考点 / TOPICS</div><div class="val">${meta.officialPointCount}</div><div class="sub">${meta.officialModuleCount} 大模块 + 补充专题</div></div>
+        <div class="stat-card" style="--c:#35d0a5"><div class="lab">考纲考点 / TOPICS</div><div class="val">${meta.pointCount}</div><div class="sub">高数 ${meta.subjectStats['高等数学'] ? meta.subjectStats['高等数学'].pointCount : ''} + 线代 ${meta.subjectStats['线性代数'] ? meta.subjectStats['线性代数'].pointCount : ''}</div></div>
+      </div>
+      <div class="grid2" style="margin-bottom:20px">
+        ${subjectList().map(s => {
+          const st = meta.subjectStats[s.name] || {};
+          const ms = modules.filter(m => m.subject === s.name);
+          return `<a class="card tight subj-card" href="#/map?subject=${s.id || ''}" style="--c:${(ms[0] || {}).color || '#8b7bff'}">
+            <div class="card-head" style="margin-bottom:8px"><h3>${esc(s.name)}</h3>
+              <span class="hint">${st.moduleCount || 0} 模块 · ${st.pointCount || 0} 考点 · ${st.questionCount || 0} 题</span></div>
+            <div class="chips">${ms.map(m => `<span class="chip"><i class="dot" style="background:${m.color}"></i>${m.no}. ${esc(m.name)}</span>`).join('')}</div>
+          </a>`;
+        }).join('')}
       </div>
       <div class="card tight" style="margin-bottom:20px">
         <div class="card-head" style="margin-bottom:10px"><h3>知识卡片速览</h3>
@@ -475,8 +508,14 @@
           ${hbars(hot, { click: true, labelWidth: 165 })}
         </div>
         <div class="card">
-          <div class="card-head"><h2>考纲模块题量分布</h2><span class="hint">一题可归多个考点</span></div>
-          ${donut(modCounts)}
+          <div class="card-head"><h2>学科 / 模块题量分布</h2><span class="hint">一题可归多个考点</span></div>
+          ${donut(subjectList().map(s => ({
+            label: s.name,
+            value: points.filter(p => p.subject === s.name).reduce((a, p) => a + cnt(p.id), 0),
+            color: s.name === '线性代数' ? '#d946ef' : '#8b7bff'
+          })), 140)}
+          <div class="divider"></div>
+          ${hbars(modCounts.slice(0, 8), { labelWidth: 138 })}
         </div>
       </div>
 
@@ -611,15 +650,28 @@
   }
 
   /* ----------------------------- 视图：知识地图 ----------------------------- */
-  let mapState = { layout: 'galaxy', module: '全部', labels: false,
-                   selected: null, cardType: '全部', cardQ: '' };
+  let mapState = { layout: 'galaxy', module: '全部', subject: '全部',
+                   labels: false, selected: null, cardType: '全部', cardQ: '' };
   function buildLayout() {
-    const W = 1000, H = 740, cx = 500, cy = 370;
+    const W = 1000, H = 760, cx = 500, cy = 380;
     const mods = modules;
-    mods.forEach((m, i) => {
-      const a = -Math.PI / 2 + i * 2 * Math.PI / mods.length;
-      m._x = cx + 352 * Math.cos(a);
-      m._y = cy + 238 * Math.sin(a);
+    // 按学科分组：高等数学 / 线性代数 各自成弧，组与组之间留出空白角
+    const groups = [];
+    mods.forEach(m => {
+      const key = m.subject || '';
+      const g = groups.find(x => x.name === key);
+      if (g) g.mods.push(m); else groups.push({ name: key, mods: [m] });
+    });
+    const GAP = 0.30;                                  // 组间间隙（弧度）
+    const total = mods.length + GAP * groups.length;
+    let acc = 0;
+    groups.forEach(g => {
+      g.mods.forEach((m, i) => {
+        const a = -Math.PI / 2 + (acc + i + 0.5) / total * 2 * Math.PI;
+        m._x = cx + 360 * Math.cos(a);
+        m._y = cy + 244 * Math.sin(a);
+      });
+      acc += g.mods.length + GAP;
     });
     const nodes = [];
     mods.forEach(m => {
@@ -661,7 +713,7 @@
     const years = [...new Set(qs.map(q => q.year))].sort((a, b) => a - b);
     const byYear = years.map(y => ({ label: String(y).slice(2), value: qs.filter(q => q.year === y).length }));
     return `<div class="card tight">
-        <div class="eyebrow" style="margin-bottom:6px">当前选中 · ${p.moduleId} · 知识点 ${pad2(p.index)}</div>
+        <div class="eyebrow" style="margin-bottom:6px">当前选中 · ${esc(p.subject || '')} · 模块 ${(MOD[p.moduleId] || {}).no || ''} · 考点 ${pad2(p.index)}</div>
         <h2 style="margin:0 0 10px;font-size:16px">${esc(p.short)}</h2>
         <p class="small" style="color:var(--txt2);line-height:1.75;margin:0 0 12px">${esc(p.text)}</p>
         <div class="chips" style="margin-bottom:12px">
@@ -692,28 +744,37 @@
     if (params && params.get('tab') === 'cards') mapState.layout = 'cards';
     if (params && params.get('type')) mapState.cardType = params.get('type');
     if (params && params.get('module')) mapState.module = params.get('module');
-    if (params && !params.get('tab') && !params.get('module') && !params.get('type')) {
+    if (params && params.get('subject')) {
+      const sid = params.get('subject');
+      const s = subjects.find(x => x.id === sid) || subjects.find(x => x.name === sid);
+      if (s) mapState.subject = s.name;
+    }
+    if (params && !params.get('tab') && !params.get('module') && !params.get('type')
+        && !params.get('subject')) {
       mapState.layout = 'galaxy';        // 侧栏「知识地图」回到全景
       mapState.module = '全部';
+      mapState.subject = '全部';
     }
+    const curSubj = subjects.find(s => s.name === mapState.subject);
     setNav(mapState.layout === 'cards' ? 'cards'
-      : (mapState.module === 'M10' ? 'linalg' : 'map'));
+      : (curSubj ? (curSubj.id === 'LA' ? 'la' : 'gs') : 'map'));
     crumb(mapState.layout === 'cards'
       ? [{ t: '知识地图', h: '#/map' }, { t: '知识卡片' }]
-      : [{ t: '知识地图' }]);
+      : (curSubj ? [{ t: '知识地图', h: '#/map' }, { t: curSubj.name }] : [{ t: '知识地图' }]));
     if (!mapState.selected) {
       mapState.selected = D.topics.slice().sort((a, b) => b.count - a.count)[0].id;
     }
     $view.innerHTML = `
       <div class="page-head"><div class="eyebrow">Knowledge Graph · Syllabus ↔ Questions ↔ Cards</div>
         <h1>考纲知识地图</h1>
-        <p>以《CMC 非数 A 高数考纲》为骨架：${meta.officialModuleCount} 个模块 / ${meta.officialPointCount} 个考点，
-           另有「补充专题」（跨章节方法）与「线性代数」（考纲外·${meta.linalgQuestionCount} 道决赛真题）两个独立模块；
+        <p>两套考纲并置：<b style="color:var(--txt2)">高等数学</b> 9 个模块（含 1 个补充专题）、
+           <b style="color:var(--txt2)">线性代数</b> 6 个模块，共 ${meta.moduleCount} 个模块 / ${meta.pointCount} 个考点；
            并配 ${meta.cardCount} 张 <b style="color:var(--txt2)">公式 / 定理 / 性质 / 解题方法</b>卡片。
            <b style="color:var(--acc)">点击任意节点，右侧栏即刻切换为该考点的考纲原文、相关卡片与对应考题。</b></p></div>
       <div class="map-toolbar">
         <div class="filter-group" id="mapLayout">${[['galaxy', '星系图'], ['tree', '树状图'], ['heat', '热力图'], ['cards', '知识卡片']].map(([k, v]) => `<button data-v="${k}" class="${mapState.layout === k ? 'on' : ''}">${v}</button>`).join('')}</div>
-        <select id="mapModule"><option value="全部">全部模块</option>${modules.map(m => `<option value="${m.id}" ${mapState.module === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+        <div class="filter-group" id="mapSubject">${['全部'].concat(subjects.map(s => s.name)).map(x => `<button data-v="${x}" class="${mapState.subject === x ? 'on' : ''}">${x}</button>`).join('')}</div>
+        <select id="mapModule"><option value="全部">全部模块</option>${moduleOptions(mapState.module)}</select>
         <label class="chip" id="mapLabelsWrap" style="cursor:pointer"><input type="checkbox" id="mapLabels" ${mapState.labels ? 'checked' : ''} style="accent-color:var(--acc)"> 显示考点标签</label>
         <span class="count" style="margin-left:auto;font-family:var(--mono)" id="mapCount"></span>
       </div>
@@ -732,10 +793,12 @@
     const renderMain = () => {
       const box = $('#mapMain');
       const isCards = mapState.layout === 'cards';
-      // 模块筛选后，侧栏自动切到该模块的第一个考点，避免显示上一个模块的考题
-      if (mapState.module !== '全部' &&
-          (!PT[mapState.selected] || PT[mapState.selected].moduleId !== mapState.module)) {
-        const first = points.find(p => p.moduleId === mapState.module);
+      // 模块/学科筛选后，侧栏自动切到范围内的第一个考点
+      const inScope = p => p &&
+        (mapState.module === '全部' || p.moduleId === mapState.module) &&
+        (mapState.subject === '全部' || p.subject === mapState.subject);
+      if (!inScope(PT[mapState.selected])) {
+        const first = points.find(inScope);
         if (first) mapState.selected = first.id;
       }
       $('#mapLayoutRoot').classList.toggle('wide', isCards);
@@ -744,12 +807,27 @@
       else if (mapState.layout === 'galaxy') { box.innerHTML = galaxyHTML(); initGalaxy(renderSide); }
       else if (mapState.layout === 'tree') box.innerHTML = treeHTML();
       else box.innerHTML = heatHTML();
-      $('#mapCount').textContent = isCards
-        ? `${cards.length} 张卡片`
-        : `${modules.length} 模块 · ${points.length} 考点`;
-      if (isCards) $('#mapSide').innerHTML = '';
-      else renderSide();
+      if (isCards) {
+        $('#mapCount').textContent = `${cards.length} 张卡片`;
+        $('#mapSide').innerHTML = '';
+      } else {
+        const ms = modules.filter(m => mapState.subject === '全部' || m.subject === mapState.subject);
+        const ps = points.filter(p => mapState.subject === '全部' || p.subject === mapState.subject);
+        $('#mapCount').textContent = `${ms.length} 模块 · ${ps.length} 考点`;
+        renderSide();
+      }
     };
+
+    $('#mapSubject').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      mapState.subject = b.dataset.v;
+      mapState.module = '全部';
+      $$('#mapSubject button').forEach(x => x.classList.toggle('on', x === b));
+      const cur = subjects.find(s => s.name === mapState.subject);
+      setNav(cur ? (cur.id === 'LA' ? 'la' : 'gs') : 'map');
+      crumb(cur ? [{ t: '知识地图', h: '#/map' }, { t: cur.name }] : [{ t: '知识地图' }]);
+      renderMain();
+    });
 
     $('#mapLayout').addEventListener('click', e => {
       const b = e.target.closest('button'); if (!b) return;
@@ -809,20 +887,26 @@
 
   function galaxyHTML() {
     const L = buildLayout();
-    const visM = mapState.module === '全部' ? L.mods : L.mods.filter(m => m.id === mapState.module);
-    const visP = L.nodes.filter(p => mapState.module === '全部' || p.moduleId === mapState.module);
+    const inSubj = m => mapState.subject === '全部' || (m && m.subject === mapState.subject);
+    const visM = L.mods.filter(m => inSubj(m) && (mapState.module === '全部' || m.id === mapState.module));
+    const visP = L.nodes.filter(p => inSubj(MOD[p.moduleId]) &&
+      (mapState.module === '全部' || p.moduleId === mapState.module));
     const edges = visP.map(p => `<path class="edge" d="M${p._hx.toFixed(1)},${p._hy.toFixed(1)} L${p._x.toFixed(1)},${p._y.toFixed(1)}" stroke="${p.color}" stroke-opacity=".22"/>`).join('');
-    const all = mapState.module === '全部';
+    const all = mapState.module === '全部' && mapState.subject === '全部';
     const spokes = all ? visM.map(m => `<line x1="${L.W / 2}" y1="${L.H / 2}" x2="${m._x}" y2="${m._y}"
         stroke="rgba(139,123,255,.12)" stroke-dasharray="3 7"/>`).join('') : '';
     const hubs = visM.map(m => {
       const c = points.filter(p => p.moduleId === m.id).reduce((a, p) => a + cnt(p.id), 0);
+      const nm = m.name.length > 11 ? m.name.slice(0, 11) + '…' : m.name;
       return `<g>
-        <circle cx="${m._x}" cy="${m._y}" r="34" fill="${m.color}" fill-opacity=".1" stroke="${m.color}" stroke-opacity=".45"/>
+        <circle cx="${m._x}" cy="${m._y}" r="34" fill="${m.color}" fill-opacity=".1" stroke="${m.color}"
+                stroke-opacity=".45" ${m.subject === '线性代数' ? 'stroke-dasharray="4 3"' : ''}/>
         <circle cx="${m._x}" cy="${m._y}" r="20" fill="${m.color}" fill-opacity=".28"/>
-        <text class="hub-lab" x="${m._x}" y="${m._y + 5}">${m.id}</text>
-        <text x="${m._x}" y="${m._y + 52}" text-anchor="middle" font-size="10.5" fill="#a7aec6" style="pointer-events:none">${esc(m.name)}</text>
-        <text x="${m._x}" y="${m._y + 67}" text-anchor="middle" font-size="9.5" fill="#6b7391" style="pointer-events:none" font-family="var(--mono)">${c} 题次</text>
+        <text class="hub-lab" x="${m._x}" y="${m._y + 6}" style="font-size:17px">${m.no}</text>
+        <text x="${m._x}" y="${m._y + 54}" text-anchor="middle" font-size="10" fill="#a7aec6"
+              style="pointer-events:none">${esc(nm)}</text>
+        <text x="${m._x}" y="${m._y + 68}" text-anchor="middle" font-size="9" fill="#6b7391"
+              style="pointer-events:none" font-family="var(--mono)">${c} 题次</text>
       </g>`;
     }).join('');
     const nodes = visP.map(p => {
@@ -853,20 +937,27 @@
             <text x="${L.W / 2}" y="${L.H / 2 + 15}" text-anchor="middle" font-size="10.5"
                   fill="#8b93b8" style="pointer-events:none">考纲知识地图</text>
             <text x="${L.W / 2}" y="${L.H / 2 + 31}" text-anchor="middle" font-size="9.5"
-                  font-family="var(--mono)" fill="#666e90" style="pointer-events:none">${meta.officialModuleCount} 模块 · ${meta.officialPointCount} 考点 · ${meta.questionCount} 题</text>
+                  font-family="var(--mono)" fill="#666e90" style="pointer-events:none">${modules.length} 模块 · ${points.length} 考点 · ${meta.questionCount} 题</text>
           </g>` : ''}
           <g>${edges}</g><g>${hubs}</g><g>${nodes}</g>
         </g>
       </svg>
       <div class="map-hint">滚轮缩放 · 拖拽平移 · 点击节点</div>
-      <div class="map-legend">${modules.map(m => `<span><i style="background:${m.color}"></i>${esc(m.name)}</span>`).join('')}</div>
+      <div class="map-legend">
+        ${subjectList().map(s => {
+          const ms = modules.filter(m => m.subject === s.name);
+          const c = ms[0] ? ms[0].color : '#888';
+          return `<span><i style="background:${c}"></i>${esc(s.name)} · ${ms.length} 模块（${ms.length ? '1–' + ms[ms.length - 1].no : ''}）</span>`;
+        }).join('')}
+        <span class="mono" style="opacity:.65">圈内数字 = 学科内模块序号</span>
+      </div>
     </div>`;
   }
 
   function initGalaxy(onSelect) {
     const svg = $('#mapSvg'); if (!svg) return;
     const root = $('#mapRoot');
-    const VB_W = 1000, VB_H = 740;
+    const VB_W = 1000, VB_H = 760;
     let tx = 0, ty = 0, sc = 1, dragging = false, lx = 0, ly = 0;
     let downX = 0, downY = 0, downNode = null, moved = false;
     const apply = () => root.setAttribute('transform', `translate(${tx},${ty}) scale(${sc})`);
@@ -928,50 +1019,70 @@
     });
     $$('#mapSvg [data-href]').forEach(g =>
       g.classList.toggle('sel', g.dataset.href === '#/topic/' + mapState.selected));
-    // 单模块筛选时把该模块的星团移到画布中央
+    // 单模块 / 单学科筛选时，把对应星团移到画布中央
+    let cx0 = null, cy0 = null;
     if (mapState.module !== '全部' && MOD[mapState.module] && MOD[mapState.module]._x != null) {
-      tx = VB_W / 2 - MOD[mapState.module]._x;
-      ty = VB_H / 2 - MOD[mapState.module]._y;
+      cx0 = MOD[mapState.module]._x; cy0 = MOD[mapState.module]._y;
+    } else if (mapState.subject !== '全部') {
+      const ms = modules.filter(m => m.subject === mapState.subject && m._x != null);
+      if (ms.length) {
+        cx0 = ms.reduce((a, m) => a + m._x, 0) / ms.length;
+        cy0 = ms.reduce((a, m) => a + m._y, 0) / ms.length;
+      }
+    }
+    if (cx0 != null) {
+      tx = VB_W / 2 - cx0;
+      ty = VB_H / 2 - cy0;
       apply();
     }
   }
 
   function treeHTML() {
-    const visM = mapState.module === '全部' ? modules : modules.filter(m => m.id === mapState.module);
+    const visM = modules.filter(m =>
+      (mapState.subject === '全部' || m.subject === mapState.subject) &&
+      (mapState.module === '全部' || m.id === mapState.module));
     const max = Math.max(1, ...points.map(p => cnt(p.id)));
-    return `<div class="card"><div class="card-head"><h2>考纲 → 考点 → 试题</h2><span class="hint">条形长度 = 关联试题数</span></div>
-      ${visM.map(m => `<div style="margin-bottom:20px">
+    let lastSubj = null;
+    return `<div class="card"><div class="card-head"><h2>考纲 → 模块 → 考点 → 试题</h2><span class="hint">条形长度 = 关联试题数</span></div>
+      ${visM.map(m => {
+        const head = m.subject !== lastSubj
+          ? `<div class="tree-subject"><b>${esc(m.subject)}</b><span class="mono">${modules.filter(x => x.subject === m.subject).length} 个模块</span></div>` : '';
+        lastSubj = m.subject;
+        return `${head}<div style="margin-bottom:20px">
         <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">
           <i style="width:10px;height:10px;border-radius:3px;background:${m.color}"></i>
-          <b style="font-size:13.5px">${esc(m.name)}</b>
-          <span class="mono small muted">${m.id} · ${m.count} 条目${m.extra ? ' · 补充' : ''}</span>
+          <b style="font-size:13.5px">${m.no}. ${esc(m.name)}</b>
+          <span class="mono small muted">${m.count} 条目${m.extra ? ' · 补充' : ''}</span>
         </div>
         ${hbars(points.filter(p => p.moduleId === m.id).map(p => ({
           label: `${pad2(p.index)}  ${p.short}`, value: cnt(p.id), color: p.color,
           href: `#/topic/${p.id}`, click: true
         })), { max, labelWidth: 200, click: true })}
-      </div>`).join('')}</div>`;
+      </div>`;
+      }).join('')}</div>`;
   }
 
   function heatHTML() {
     const eds = [...new Set(papers.map(p => p.edition))].sort((a, b) => a - b);
-    const visM = mapState.module === '全部' ? modules : modules.filter(m => m.id === mapState.module);
+    const visM = modules.filter(m =>
+      (mapState.subject === '全部' || m.subject === mapState.subject) &&
+      (mapState.module === '全部' || m.id === mapState.module));
     const values = [];
     visM.forEach(m => {
       const qs = questions.filter(q => q.topics.some(t => PT[t] && PT[t].moduleId === m.id));
       eds.forEach(e => values.push({ m: m.id, e, v: qs.filter(q => q.edition === e).length }));
     });
     const max = Math.max(1, ...values.map(x => x.v));
-    const cols = `28px 132px repeat(${eds.length},minmax(26px,1fr))`;
+    const cols = `28px 148px repeat(${eds.length},minmax(26px,1fr))`;
     return `<div class="card"><div class="card-head"><h2>模块 × 届次 热力图</h2><span class="hint">单元格 = 该届涉及该模块的试题数</span></div>
       <div class="heat-wrap"><div class="heat-grid" style="grid-template-columns:${cols}">
         <div></div><div class="heat-col-lab" style="text-align:left">模块 / 届次</div>
         ${eds.map(e => `<div class="heat-col-lab">${e}</div>`).join('')}
         ${visM.map(m => `
-          <div class="heat-row-lab" style="grid-column:1/3"><i style="width:8px;height:8px;border-radius:2px;background:${m.color}"></i>${esc(m.name)}</div>
+          <div class="heat-row-lab" style="grid-column:1/3"><i style="width:8px;height:8px;border-radius:2px;background:${m.color}"></i>${m.no}. ${esc(m.name)}</div>
           ${eds.map(e => {
             const v = values.find(x => x.m === m.id && x.e === e).v;
-            return `<div class="heat-cell" style="background:${heatColor(v, max)}" title="第 ${e} 届 · ${esc(m.name)}：${v} 题">${v || ''}</div>`;
+            return `<div class="heat-cell" style="background:${heatColor(v, max)}" title="${esc(m.subject)} 模块 ${m.no} · 第 ${e} 届：${v} 题">${v || ''}</div>`;
           }).join('')}`).join('')}
       </div></div>
       <div class="heat-scale">低 ${[0, .2, .4, .6, .8, 1].map(t => `<i style="background:${heatColor(t * max, max)}"></i>`).join('')} 高（峰值 ${max} 题）</div>
@@ -983,9 +1094,12 @@
     const p = PT[id], t = TP[id];
     if (!p) { $view.innerHTML = '<div class="empty">未找到该知识点</div>'; return; }
     const mod = MOD[p.moduleId] || {};
-    const isLA = p.moduleId === 'M10';
-    setNav(isLA ? 'linalg' : 'map'); mapState.selected = id;
-    crumb([{ t: '知识地图', h: '#/map' }, { t: p.moduleName, h: isLA ? '#/map?module=M10' : '#/map' }, { t: `${id} ${p.short}` }]);
+    const isLA = p.subject === '线性代数';
+    setNav(isLA ? 'la' : 'gs'); mapState.selected = id;
+    crumb([{ t: '知识地图', h: '#/map' },
+           { t: esc(p.subject), h: `#/map?subject=${mod.subjectId || ''}` },
+           { t: `${mod.no}. ${p.moduleName}`, h: `#/map?module=${p.moduleId}` },
+           { t: `${id} ${p.short}` }]);
     const qs = Qof(id);
     const years = [...new Set(qs.map(q => q.year))].sort((a, b) => a - b);
     const byStage = ['初赛', '补赛', '决赛'].map(s => ({ label: s, value: qs.filter(q => q.stage === s).length, color: s === '决赛' ? '#ff7a59' : '#8b7bff' }));
@@ -993,13 +1107,14 @@
     const kw = p.keywords.map(k => `<span class="chip">${esc(k.kw)} <span class="mono muted">×${k.w}</span></span>`).join('');
     $view.innerHTML = `
       <div class="page-head">
-        <div class="eyebrow">${esc(p.moduleName)} · ${id} · ${isLA ? '考纲外 · 决赛真题归纳' : `考纲第 ${pad2(p.index)} 条`}</div>
+        <div class="eyebrow">${esc(p.subject)} · 模块 ${mod.no} · ${esc(p.moduleName)} · 考点 ${pad2(p.index)}（${id}）</div>
         <h1>${esc(p.short)}</h1>
         <p>${esc(p.text)}</p>
         ${isLA ? `<div class="card tight syl-note" style="--c:${p.color};margin-top:12px">
-          本考点不属于《CMC 非数 A 类高数考纲》，而是依据用户逐届核对的决赛真题清单单独归纳，
-          共 ${meta.linalgQuestionCount} 道线性代数题；题目表中的 <span class="tl-sub">一(4)</span> 等标记表示
-          「填空题第 4 小题」，其余为整道大题。</div>` : ''}
+          本条来自《线性代数考纲》第 ${mod.no} 模块「${esc(p.moduleName)}」。
+          历届决赛中的线性代数题按用户核对的清单显式标注（共 ${meta.linalgQuestionCount} 道），不做关键词自动匹配；
+          题目表中的 <span class="tl-sub">一(4)</span> 等标记表示「填空题第 4 小题」，其余为整道大题。
+          ${qs.length ? '' : '<br><b>本考点近 17 届未单独出题</b>，可作为复习清单中的知识覆盖项。'}</div>` : ''}
       </div>
       <div class="stat-grid" style="grid-template-columns:repeat(4,1fr)">
         <div class="stat-card" style="--c:${p.color}"><div class="lab">关联试题</div><div class="val">${t.count}</div><div class="sub">占全部 ${(t.count / questions.length * 100).toFixed(1)}%</div></div>
@@ -1082,33 +1197,47 @@
     $view.innerHTML = `
       <div class="page-head"><div class="eyebrow">Syllabus · CMC 非数 A 类</div>
         <h1>${esc(syl.title)}</h1>
-        <p>逐条转录自 <span class="mono">${esc(syl.source)}</span>：${meta.officialModuleCount} 个模块 / ${meta.officialPointCount} 个考点；
-           另设「补充专题」（跨章节方法）与「线性代数」（考纲外·历届决赛真题归纳）两个独立模块。
-           每个条目后的数字为关联到的试题数。</p></div>
-      <div id="sylWrap">${modules.map(m => {
-        const c = points.filter(p => p.moduleId === m.id).reduce((a, p) => a + cnt(p.id), 0);
-        return `<div class="card syl-module ${sylClosed[m.id] ? 'closed' : ''}" data-mid="${m.id}" style="padding:0">
-          <div class="syl-head" data-toggle="${m.id}">
-            <span class="idx" style="--c:${m.color};background:${m.color}">${m.id.replace('M', '')}</span>
-            <h2>${esc(m.name)} ${m.tag ? `<span class="badge" style="margin-left:6px;color:${m.color};border-color:${m.color}55">${esc(m.tag)}</span>` : ''}</h2>
-            <span class="meta">${m.count} 条目 · ${c} 题次</span><span class="chev">⌄</span>
+        <p>两套考纲分别转录自 <span class="mono">CMC非数A高数考纲.docx</span> 与
+           <span class="mono">CMC非数A线代考纲.docx</span>，按学科分栏：共
+           ${meta.moduleCount} 个模块 / ${meta.pointCount} 个考点
+           （高等数学 ${(meta.subjectStats['高等数学'] || {}).moduleCount} 模块 / ${(meta.subjectStats['高等数学'] || {}).pointCount} 考点，
+           线性代数 ${(meta.subjectStats['线性代数'] || {}).moduleCount} 模块 / ${(meta.subjectStats['线性代数'] || {}).pointCount} 考点）。
+           模块序号为各学科内部编号；每条后面的数字为关联到的试题数。</p></div>
+      <div id="sylWrap">${subjectList().map(s => {
+        const ms = modules.filter(m => m.subject === s.name);
+        const pc = points.filter(p => p.subject === s.name).length;
+        return `<div class="syl-subject">
+          <div class="syl-subject-head">
+            <span class="ss-dot"></span><b>${esc(s.name)}</b>
+            <span class="mono">${ms.length} 个模块 · ${pc} 个考点</span>
+            <a class="chip" href="#/map?subject=${s.id || ''}" style="margin-left:auto">在知识地图中查看 →</a>
           </div>
-          <div class="syl-body">
-            ${m.note ? `<div class="syl-note" style="--c:${m.color}">${esc(m.note)}</div>` : ''}
-            ${points.filter(p => p.moduleId === m.id).map(p => `
-            <div class="syl-item">
-              <span class="n">${pad2(p.index)}</span>
-              <span class="tx">${esc(p.text)}</span>
-              <span class="go"><a class="chip count" href="#/topic/${p.id}">${cnt(p.id)} 题 →</a>
-                <span class="small muted mono">${p.id}</span></span>
-            </div>`).join('')}</div>
+          ${ms.map(m => {
+            const c = points.filter(p => p.moduleId === m.id).reduce((a, p) => a + cnt(p.id), 0);
+            return `<div class="card syl-module ${sylClosed[m.id] ? 'closed' : ''}" data-mid="${m.id}" style="padding:0">
+              <div class="syl-head" data-toggle="${m.id}">
+                <span class="idx" style="--c:${m.color};background:${m.color}">${m.no}</span>
+                <h2>${esc(m.name)} ${m.tag ? `<span class="badge" style="margin-left:6px;color:${m.color};border-color:${m.color}55">${esc(m.tag)}</span>` : ''}</h2>
+                <span class="meta">${m.count} 条目 · ${c} 题次</span><span class="chev">⌄</span>
+              </div>
+              <div class="syl-body">
+                ${m.note ? `<div class="syl-note" style="--c:${m.color}">${esc(m.note)}</div>` : ''}
+                ${points.filter(p => p.moduleId === m.id).map(p => `
+                <div class="syl-item">
+                  <span class="n">${pad2(p.index)}</span>
+                  <span class="tx">${esc(p.text)}</span>
+                  <span class="go"><a class="chip count" href="#/topic/${p.id}">${cnt(p.id)} 题 →</a>
+                    <span class="small muted mono">${p.id}</span></span>
+                </div>`).join('')}</div>
+            </div>`;
+          }).join('')}
         </div>`;
       }).join('')}
       </div>
       <div class="card tight" style="margin-top:18px"><div class="small muted">
-        📎 说明：试题与考点的对应关系由 <span class="mono">scripts/build_data.py</span> 中的关键词规则自动匹配，
-        并对少量超纲题做人工校正。可在知识点详情页查看「自动标注依据」，或编辑
-        <span class="mono">scripts/syllabus_source.json</span> 后重新运行脚本更新。</div></div>`;
+        📎 说明：高等数学与线性代数两套考纲分别转录自对应 docx，模块序号按各学科内部顺序编号（圈内数字）。
+        考点与试题的对应由 <span class="mono">scripts/build_data.py</span> 的关键词规则自动匹配；线性代数题按人工核对的决赛清单显式标注。
+        可编辑 <span class="mono">scripts/syllabus_source.json</span> 后重新运行脚本更新。</div></div>`;
     $('#sylWrap').addEventListener('click', e => {
       const h = e.target.closest('[data-toggle]'); if (!h) return;
       const mid = h.dataset.toggle; sylClosed[mid] = !sylClosed[mid];
@@ -1120,9 +1249,14 @@
   function viewStats() {
     setNav('stats'); crumb([{ t: '统计分析' }]);
     const modCounts = modules.map(m => ({
-      label: m.name, value: points.filter(p => p.moduleId === m.id).reduce((a, p) => a + cnt(p.id), 0),
-      color: m.color, href: '#/map'
+      label: `${m.no}. ${m.name}`, value: points.filter(p => p.moduleId === m.id).reduce((a, p) => a + cnt(p.id), 0),
+      color: m.color, color2: m.subject === '线性代数' ? '#d946ef' : '#4d8dff', href: `#/map?module=${m.id}`
     })).sort((a, b) => b.value - a.value);
+    const subjDist = subjectList().map(s => ({
+      label: s.name,
+      value: points.filter(p => p.subject === s.name).reduce((a, p) => a + cnt(p.id), 0),
+      color: s.name === '线性代数' ? '#d946ef' : '#8b7bff'
+    }));
     const byYearPapers = [...new Set(papers.map(p => p.year))].sort((a, b) => a - b)
       .map(y => ({ label: String(y).slice(2), value: papers.filter(p => p.year === y).length }));
     const byYearQ = [...new Set(questions.map(q => q.year))].sort((a, b) => a - b)
@@ -1145,10 +1279,11 @@
       <div class="page-head"><div class="eyebrow">Analytics · 272 Questions · ${meta.cardCount} Cards</div><h1>统计分析</h1>
         <p>基于 ${papers.length} 套试卷 / ${questions.length} 道大题 / ${meta.cardCount} 张知识卡片的自动标注结果。一道题可归入多个考点与多张卡片，故分项总和大于试题数。</p></div>
       <div class="grid2">
-        <div class="card"><div class="card-head"><h2>各模块题次</h2><span class="hint">点击可前往知识地图</span></div>${hbars(modCounts, { click: true, labelWidth: 145 })}</div>
-        <div class="card"><div class="card-head"><h2>试卷阶段 / 试题题型</h2></div>
-          <div class="small muted" style="margin-bottom:6px">试卷阶段（套）</div>${donut(stages, 140)}
-          <div class="divider"></div><div class="small muted" style="margin-bottom:6px">试题题型（道）</div>${donut(types, 140)}</div>
+        <div class="card"><div class="card-head"><h2>各模块题次</h2><span class="hint">高数 1–9 / 线代 1–6 · 点击前往</span></div>${hbars(modCounts, { click: true, labelWidth: 168 })}</div>
+        <div class="card"><div class="card-head"><h2>学科 · 阶段 · 题型</h2></div>
+          <div class="small muted" style="margin-bottom:6px">学科题次（高数 / 线代）</div>${donut(subjDist, 132)}
+          <div class="divider"></div><div class="small muted" style="margin-bottom:6px">试卷阶段（套）</div>${donut(stages, 132)}
+          <div class="divider"></div><div class="small muted" style="margin-bottom:6px">试题题型（道）</div>${donut(types, 132)}</div>
       </div>
       <div class="grid2" style="margin-top:18px">
         <div class="card"><div class="card-head"><h2>逐年试卷数</h2><span class="hint">2009 – 2026</span></div>${columns(byYearPapers)}</div>

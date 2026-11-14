@@ -336,6 +336,19 @@ a.chip:hover{color:#fff;border-color:var(--acc);background:rgba(139,123,255,.16)
 .syl-module.closed .chev{transform:rotate(-90deg)}
 .syl-module.closed .syl-body{display:none}
 .syl-body{padding:0 20px 16px}
+/* 学科分组 */
+.syl-subject{margin-bottom:26px}
+.syl-subject-head{display:flex;align-items:center;gap:10px;margin:0 0 12px;padding:0 4px}
+.syl-subject-head b{font-size:17px;letter-spacing:.02em}
+.syl-subject-head .mono{font-size:11px;color:var(--muted)}
+.syl-subject-head .ss-dot{width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,#8b7bff,#4d8dff)}
+.syl-subject:last-of-type .syl-subject-head .ss-dot{background:linear-gradient(135deg,#ff5f9e,#d946ef)}
+.subj-card{display:block;transition:.2s;border-left:2px solid var(--c)}
+.subj-card:hover{transform:translateY(-3px);border-color:var(--c);box-shadow:0 14px 34px rgba(0,0,0,.35)}
+.tree-subject{display:flex;align-items:center;gap:10px;margin:6px 0 12px;padding:7px 12px;
+  border-left:2px solid var(--acc);background:rgba(255,255,255,.04);border-radius:0 8px 8px 0}
+.tree-subject b{font-size:14px}
+.tree-subject .mono{font-size:10.5px;color:var(--muted)}
 .syl-note{margin:2px 0 12px;padding:10px 13px;border-left:2px solid var(--c);
   border-radius:0 9px 9px 0;background:rgba(255,255,255,.035);font-size:11.5px;line-height:1.75;color:var(--txt2)}
 .syl-item{display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line)}
