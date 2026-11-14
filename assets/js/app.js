@@ -917,7 +917,7 @@
         </div>
         <div class="viewer card" id="qViewer" style="padding:0;overflow:hidden">
           <div class="card-head" style="padding:12px 16px 10px;margin:0">
-            <h3>单题阅读 <span class="hint">原卷裁切 · 只显示这一题</span></h3>
+            <h3><span id="pvTitleMain">单题阅读</span> <span class="hint" id="pvTitleHint">原卷裁切 · 只显示这一题</span></h3>
             <div class="seg-toggle" id="pvToggle">
               <button data-m="crop" class="on">单题</button>
               <button data-m="page">整卷</button>
@@ -944,7 +944,15 @@
       $$('#pvToggle button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
       $('#inlineQ').hidden = m !== 'crop';
       $('#inlinePageWrap').hidden = m !== 'page';
-      if (m === 'page' && current) {
+      // 标题必须跟着模式走：整卷时再说「只显示这一题」是错的
+      const isPage = m === 'page';
+      const nPage = v.seq ? v.seq.length : 0;
+      $('#pvTitleMain').textContent = isPage ? '整卷浏览' : '单题阅读';
+      // 长短两版副标题由 CSS 按屏宽切换，窄屏不出现孤字换行
+      $('#pvTitleHint').innerHTML = isPage
+        ? `<span class="hint-long">${esc(p.code)} · 本套 ${nPage} 页（题目 + 参考解答）</span><span class="hint-short">本套 ${nPage} 页</span>`
+        : `<span class="hint-long">原卷裁切 · 只显示这一题</span><span class="hint-short">只显示这一题</span>`;
+      if (isPage && current) {
         v.go(current.mode === 'solution' ? current.q.solutionPage : current.q.questionPage, qCtx(current.q, current.mode));
       }
     };
