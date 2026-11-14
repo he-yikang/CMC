@@ -294,10 +294,12 @@
     }
   }
 
-  class Viewer {    constructor(stage, toolbar, canvas, opts = {}) {
+  class Viewer {
+    constructor(stage, toolbar, canvas, opts = {}) {
       this.stage = stage; this.toolbar = toolbar; this.canvas = canvas;
       this.page = 1; this.zoom = 1; this.token = 0;
       this.ctx = null;   // {mode, questionPage, solutionPage, label, title}
+      this.seq = null;   // 本卷页序 [{p, kind}]：限定只能在本套试卷内翻阅
       this.opts = opts;
       this.buildToolbar();
       this.ensureWrap();
@@ -322,6 +324,7 @@
         <input class="pnum" type="number" min="1" max="${meta.pageCount}" value="1" aria-label="页码">
         <span class="pg">/ ${meta.pageCount}</span>
         <button class="icon-btn" data-act="next" title="下一页">›</button>
+        <span class="seq-tag" id="${this.opts.modeId || 'vmode'}-seq" hidden></span>
         <span style="width:8px"></span>
         <button class="icon-btn" data-act="zoomout" title="缩小">−</button>
         <button class="icon-btn" data-act="zoomin" title="放大">+</button>
@@ -334,16 +337,23 @@
       this.toolbar.addEventListener('click', e => {
         const b = e.target.closest('[data-act]'); if (!b) return;
         const a = b.dataset.act;
-        if (a === 'prev') this.go(Math.max(1, this.page - 1));
-        if (a === 'next') this.go(Math.min(meta.pageCount, this.page + 1));
+        if (a === 'prev') this.step(-1);
+        if (a === 'next') this.step(1);
         if (a === 'zoomin') this.setZoom(this.zoom + .2);
         if (a === 'zoomout') this.setZoom(this.zoom - .2);
         if (a === 'fit') this.setZoom(1);
         if (a === 'swap') this.swap();
       });
       this.toolbar.querySelector('.pnum').addEventListener('change', e => {
-        const n = Math.min(meta.pageCount, Math.max(1, parseInt(e.target.value, 10) || 1));
-        this.go(n);
+        const n = parseInt(e.target.value, 10) || 1;
+        if (this.seq) {
+          // 输入的是本套第几页；若恰好是真实 PDF 页码（如 314）也认，方便对照原件
+          const byPdf = this.seq.findIndex(x => x.p === n);
+          const i = byPdf >= 0 ? byPdf : Math.min(this.seq.length, Math.max(1, n)) - 1;
+          this.go(this.seq[i].p);
+        } else {
+          this.go(Math.min(meta.pageCount, Math.max(1, n)));
+        }
       });
     }
     setZoom(z) { this.zoom = Math.min(3, Math.max(.5, z)); this.render(); }
@@ -354,10 +364,68 @@
       const raw = this.toolbar.querySelector('[data-act="raw"]');
       if (raw) raw.href = `assets/cmc-papers.pdf#page=${this.page}`;
     }
+    /** 限定阅读范围：seq = [{p, kind:'q'|'s'}]；传 null 恢复整本文档 */
+    setSeq(seq) {
+      this.seq = seq && seq.length ? seq.slice() : null;
+      // 当前页若不在新范围内，先落到范围内第一页，避免页码显示与画面不一致
+      if (this.seq && !this.seq.some(x => x.p === this.page)) this.page = this.seq[0].p;
+      this.updatePager();
+    }
+    /** 在当前范围内前后翻页；越界只提示，绝不跨到别的试卷 */
+    step(d) {
+      if (!this.seq) { this.go(this.page + d); return; }
+      const i = this.seq.findIndex(x => x.p === this.page);
+      const j = (i < 0 ? 0 : i) + d;
+      if (j < 0 || j >= this.seq.length) {
+        toast(d > 0 ? '已经是本套试卷的最后一页' : '已经是本套试卷的第一页');
+        return;
+      }
+      const from = i >= 0 ? this.seq[i].kind : null;
+      const to = this.seq[j].kind;
+      this.go(this.seq[j].p).then(() => {
+        if (from && from !== to) toast(to === 's' ? '进入本套参考解答' : '回到本套题目');
+      });
+    }
+    /** 页码控件在「本卷页序」与「整本文档」两种模式间切换 */
+    updatePager() {
+      const inp = this.toolbar.querySelector('.pnum');
+      const lab = this.toolbar.querySelector('.pg');
+      const tag = this.toolbar.querySelector('.seq-tag');
+      if (!inp || !lab) return;
+      if (this.seq) {
+        const i = Math.max(0, this.seq.findIndex(x => x.p === this.page));
+        const it = this.seq[i] || {};
+        inp.value = i + 1;
+        inp.max = this.seq.length;
+        inp.title = `本套内第几页（共 ${this.seq.length} 页）`;
+        lab.textContent = `/ ${this.seq.length}`;
+        if (tag) {
+          tag.hidden = false;
+          tag.textContent = `${it.kind === 's' ? '参考解答' : '题目'} · P${this.page}`;
+        }
+        // 本套页序下，标签已经写明「题目 / 参考解答」，不再重复显示模式小标
+        const modeEl = this.toolbar.querySelector('.mode');
+        if (modeEl) modeEl.hidden = true;
+      } else {
+        inp.value = this.page;
+        inp.max = meta.pageCount;
+        inp.title = 'PDF 页码';
+        lab.textContent = `/ ${meta.pageCount}`;
+        if (tag) tag.hidden = true;
+        const modeEl = this.toolbar.querySelector('.mode');
+        if (modeEl) modeEl.hidden = false;
+      }
+    }
     async go(page, ctx) {
-      this.page = Math.min(meta.pageCount, Math.max(1, page | 0));
+      const p = Math.round(page);
+      // 有范围限制时，只接受本套试卷内的页
+      if (this.seq && !this.seq.some(x => x.p === p)) {
+        toast(`P${p} 属于别套试卷，已阻止跳出本套`);
+        return;
+      }
+      this.page = this.seq ? p : Math.min(meta.pageCount, Math.max(1, p | 0));
       if (ctx) this.setContext(ctx);
-      const inp = this.toolbar.querySelector('.pnum'); if (inp) inp.value = this.page;
+      this.updatePager();
       const raw = this.toolbar.querySelector('[data-act="raw"]');
       if (raw) raw.href = `assets/cmc-papers.pdf#page=${this.page}`;
       await this.render();
@@ -450,8 +518,13 @@
           el.addEventListener('click', async ev => {
             ev.preventDefault(); ev.stopPropagation();
             const p = await destToPage(doc, a.dest);
-            if (p) { this.go(p); toast(`PDF 内部链接 → 第 ${p} 页`); }
-            else toast('该链接目标无法解析');
+            if (!p) { toast('该链接目标无法解析'); return; }
+            if (this.seq && !this.seq.some(x => x.p === p)) {
+              toast(`该链接指向 P${p}（不在本套内），已阻止`);
+              return;
+            }
+            this.go(p);
+            toast(`PDF 内部链接 → 本套第 ${this.seq ? this.seq.findIndex(x => x.p === p) + 1 : p} 页`);
           });
         } else continue;
         frag.appendChild(el); n++;
@@ -470,13 +543,15 @@
   function initDrawer() {
     drawerViewer = new Viewer($('#drawerStage'), $('#drawerToolbar'), $('#drawerCanvas'), { modeId: 'drawerMode' });
   }
-  function openPdf(page, ctx, title, sub) {
+  function openPdf(page, ctx, title, sub, seq) {
     if (!drawer.classList.contains('open')) {
       drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false');
     }
     $('#drawerPanel').classList.remove('crop');
     $('#drawerTitle').textContent = title || 'PDF 阅读器';
     $('#drawerSub').textContent = sub || '';
+    // 从某道题进来的「原页」也只在本套试卷内翻阅
+    drawerViewer.setSeq(seq || null);
     drawerViewer.go(page, ctx || null);
     document.body.style.overflow = 'hidden';
   }
@@ -515,8 +590,9 @@
   $('#drawerBar').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b || !drawerQ) return;
     if (b.dataset.orig) {
+      const pp = P[pad2(drawerQ.paperId)];
       openPdf(Number(b.dataset.orig), qCtx(drawerQ, 'question'), `${drawerQ.id} · 原页`,
-        `${P[pad2(drawerQ.paperId)].year} ${P[pad2(drawerQ.paperId)].short} · PDF 第 ${b.dataset.orig} 页`);
+        `${pp.year} ${pp.short} · PDF 第 ${b.dataset.orig} 页`, paperSeq(pp));
       return;
     }
     const block = $('#drawerBody').querySelector(`[data-block="${b.dataset.pane}"]`);
@@ -788,6 +864,14 @@
   }
 
   /* ----------------------------- 视图：试卷详情 ----------------------------- */
+  /** 本套试卷的页序：[题目页...] + [参考解答页...]，整卷阅读只允许在这一串里走 */
+  function paperSeq(p) {
+    const seq = [];
+    for (let i = p.questionPage; i <= p.questionEnd; i++) seq.push({ p: i, kind: 'q' });
+    for (let j = p.solutionPage; j <= p.solutionEnd; j++) seq.push({ p: j, kind: 's' });
+    return seq;
+  }
+
   function viewPaper(code, focusQid) {
     const p = P[code];
     if (!p) { $view.innerHTML = '<div class="empty">未找到该试卷</div>'; return; }
@@ -850,6 +934,8 @@
     observeThumbs($('#qList'));
 
     const v = new Viewer($('#inlineStage'), $('#inlineToolbar'), $('#inlineCanvas'), { modeId: 'inlineMode' });
+    // 整卷模式只在本套范围内翻阅：先本套题目页，再本套参考解答页
+    v.setSeq(paperSeq(p));
     let pvMode = 'crop';
     let current = null;
 

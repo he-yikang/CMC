@@ -271,6 +271,9 @@ a.chip:hover{color:#fff;border-color:var(--acc);background:rgba(139,123,255,.16)
 .pdf-toolbar input.pnum{width:52px;padding:4px 6px;text-align:center;border:1px solid var(--line);
   border-radius:7px;background:rgba(255,255,255,.05);color:var(--txt);font-family:var(--mono);font-size:11.5px;outline:none}
 .pdf-toolbar .sp{flex:1}
+.pdf-toolbar .seq-tag{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:7px;
+  background:rgba(139,123,255,.14);color:#c9c1ff;border:1px solid rgba(139,123,255,.3);
+  white-space:nowrap;letter-spacing:.02em}
 .pdf-toolbar .mode{font-family:var(--mono);font-size:10.5px;padding:4px 9px;border-radius:7px;
   border:1px solid rgba(139,123,255,.35);background:rgba(139,123,255,.12);color:#b7aaff;white-space:nowrap}
 .pdf-stage{position:relative;overflow:auto;display:flex;justify-content:flex-start;
