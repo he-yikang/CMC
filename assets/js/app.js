@@ -669,7 +669,7 @@
     return `<div class="card" id="${tableId}" style="padding:6px 14px">
       <table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题型</th><th>题目</th><th>考点</th><th>题目页</th><th>解答页</th></tr></thead>
       <tbody>${qs.map(q => `<tr>
-        <td><a href="#/paper/${pad2(q.paperId)}?q=${q.id}" class="mono">${q.id}</a>${q.subLabel ? ` <span class="tl-sub">${esc(q.subLabel)}</span>` : ''}</td>
+        <td><a href="#/paper/${pad2(q.paperId)}?q=${encodeURIComponent(q.id)}" class="mono">${q.id}</a>${q.subLabel ? ` <span class="tl-sub">${esc(q.subLabel)}</span>` : ''}</td>
         <td>${q.year} ${esc(P[pad2(q.paperId)].short)}</td>
         <td><span class="badge type">${q.type}</span></td>
         <td style="width:300px">${thumbHTML(q, 'thumbS', 'mini')}</td>
@@ -709,8 +709,8 @@
     }).join('')}</div>`;
   }
   function paperCard(p) {
-    return `<a class="paper-card" href="#/paper/${p.code}">
-      <div class="pc-top"><span class="pc-code">卷 ${p.code}</span><span class="pc-year">${p.year}</span></div>
+    return `<a class="paper-card" href="#/paper/${pad2(p.id)}">
+      <div class="pc-top"><span class="pc-code">标号 ${p.code}</span><span class="pc-year">${p.year}</span></div>
       <div class="pc-title">${esc(p.short)}</div>
       <div class="pc-meta">
         <span class="badge stage-${p.stage}">${p.stage}</span>
@@ -749,7 +749,7 @@
         <div class="eyebrow">Chinese Mathematics Competitions · Non-Math Track</div>
         <h1>全国大学生数学竞赛<br><em>历届真题 × 考纲知识地图</em></h1>
         <p>第一至第十七届非数学类初赛、补赛与决赛：${meta.paperCount} 套试卷、${meta.questionCount} 道大题，
-           按「卷序.题号」双向索引题目与参考解答；知识地图并置两套考纲：
+           按「标号.题号」双向索引题目与参考解答；知识地图并置两套考纲：
            <b style="color:var(--txt2)">高等数学</b> 9 个模块（${(meta.subjectStats['高等数学'] || {}).pointCount} 个考点）、
            <b style="color:var(--txt2)">线性代数</b> 6 个模块（${(meta.subjectStats['线性代数'] || {}).pointCount} 个考点），
            把每道题挂到对应知识点上，并配 ${meta.cardCount} 张公式 / 定理 / 性质 / 解题方法卡片。</p>
@@ -876,11 +876,11 @@
     const p = P[code];
     if (!p) { $view.innerHTML = '<div class="empty">未找到该试卷</div>'; return; }
     setNav('papers');
-    crumb([{ t: '历届真题', h: '#/papers' }, { t: `第 ${p.code} 套 · ${p.short}` }]);
+    crumb([{ t: '历届真题', h: '#/papers' }, { t: `${p.code} · ${p.short}` }]);
     const qs = questions.filter(q => q.paperId === p.id);
     $view.innerHTML = `
       <div class="page-head" style="margin-bottom:16px">
-        <div class="eyebrow">Paper ${p.code} / ${meta.paperCount}</div>
+        <div class="eyebrow">${p.code} · 第 ${p.edition} 届 ${p.stage}${p.group && p.group !== '不分 A/B' ? ' · ' + p.group : ''}</div>
         <h1>${p.year} 年 · ${esc(p.short)}</h1>
         <p>全国大学生数学竞赛（非数学类） · 第 ${p.edition} 届 · 共 ${qs.length} 道大题 ·
            题目 P${p.questionPage}–P${p.questionEnd} · 参考解答 P${p.solutionPage}–P${p.solutionEnd}</p>
@@ -1683,7 +1683,7 @@
       ${hitQ.length ? `<div class="section-title">试题 <span class="n">${hitQ.length}</span></div>
         <div class="card" id="searchTable" style="padding:6px 14px"><table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题目</th><th>考点</th><th>题目</th><th>解答</th></tr></thead>
         <tbody>${hitQ.slice(0, 150).map(x => `<tr>
-          <td><a class="mono" href="#/paper/${pad2(x.paperId)}?q=${x.id}">${x.id}</a></td>
+          <td><a class="mono" href="#/paper/${pad2(x.paperId)}?q=${encodeURIComponent(x.id)}">${x.id}</a></td>
           <td class="small">${x.year} ${esc(P[pad2(x.paperId)].short)}</td>
           <td style="width:320px">${thumbHTML(x, 'thumbS', 'mini')}</td>
           <td>${topicChips(x, 2)}</td>

@@ -24,6 +24,7 @@ import os
 import re
 import sys
 import unicodedata
+import bisect
 from collections import Counter, defaultdict
 
 try:
@@ -38,6 +39,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PDF_PATH = os.path.join(ROOT, "assets", "cmc-papers.pdf")
 SRC_PATH = os.path.join(ROOT, "scripts", "syllabus_source.json")
 CARDS_PATH = os.path.join(ROOT, "scripts", "cards_source.json")
+PAPERS_PATH = os.path.join(ROOT, "scripts", "papers_source.json")
 OUT_DIR = os.path.join(ROOT, "assets", "data")
 
 CN_NUM = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7,
@@ -118,7 +120,7 @@ def page_text_lines(page):
             t = norm_text("".join(s["text"] for s in ln["spans"]))
             t = re.sub(r"[ \t]{2,}", " ", t).strip()
             if t:
-                out.append(t)
+                out.append((ln["bbox"][1], t))
     return out
 
 
@@ -135,6 +137,8 @@ NOISE = [
     r"^总分$", r"^满分$", r"^得分$", r"^题号$", r"^注意$",
     r"^\d+\.\s*(所有答题|密封线|如答题空白)",
     r"^\d+\s+\d+\s+\d+\s+\d+", r"^[一二三四五六七八九十]\s+[一二三四五六七八九十]\s+",
+    # 改标号后新绘制的页眉（会被追加到页尾的文本流里）
+    r"^\S{1,8}\s*/\s*(题目版|参考解答)$", r"^(题目版|参考解答)\s*/\s*\S{1,8}$",
 ]
 NOISE_RE = [re.compile(p) for p in NOISE]
 
@@ -148,9 +152,9 @@ GENERIC = {
 
 # 少量人工校正：超纲不等式题 / 关键词匹配失效的积分题。
 OVERRIDES = {
-    "36.6": ["M9-01"],
-    "06.2": ["M3-03", "M3-04"],
-    "15.4": ["M3-03", "M9-01"],
+    "13决.6": ["M9-01"],
+    "6初.2": ["M3-03", "M3-04"],
+    "14初.4": ["M3-03", "M9-01"],
 }
 
 # ---------------------------------------------------------------------------
@@ -159,27 +163,27 @@ OVERRIDES = {
 # sub 表示该大题中真正属于线性代数的小题（填空题「一」含多个小题）。
 # ---------------------------------------------------------------------------
 LINALG = {
-    "28.1": {"sub": "一(4)", "points": ["L2-03", "L2-04"]},
-    "28.6": {"sub": "六",   "points": ["L6-03"]},
-    "29.1": {"sub": "一(3)", "points": ["L2-02"]},
-    "29.3": {"sub": "三",   "points": ["L5-02"]},
-    "30.1": {"sub": "一(4)", "points": ["L5-01", "L1-01"]},
-    "30.4": {"sub": "四",   "points": ["L2-04"]},
-    "31.1": {"sub": "一(3)", "points": ["L2-05", "L2-04"]},
-    "31.5": {"sub": "五",   "points": ["L1-03", "L2-02"]},
-    "32.1": {"sub": "一(5)", "points": ["L1-01"]},
-    "33.1": {"sub": "一(5)", "points": ["L6-01"]},
-    "33.6": {"sub": "六",   "points": ["L5-02", "L2-04"]},
-    "34.5": {"sub": "五",   "points": ["L6-03", "L1-01"]},
-    "35.1": {"sub": "一(4)", "points": ["L2-03"]},
-    "35.5": {"sub": "五",   "points": ["L5-03"]},
-    "36.7": {"sub": "七",   "points": ["L2-04", "L3-04"]},
-    "37.2": {"sub": "二",   "points": ["L6-02"]},
-    "38.5": {"sub": "五",   "points": ["L5-02"]},
-    "39.5": {"sub": "五",   "points": ["L6-03", "L6-01"]},
-    "40.6": {"sub": "六",   "points": ["L6-03"]},
-    "41.5": {"sub": "五",   "points": ["L6-02"]},
-    "42.6": {"sub": "六",   "points": ["L6-02"]},
+    "5决.1": {"sub": "一(4)", "points": ["L2-03", "L2-04"]},
+    "5决.6": {"sub": "六",   "points": ["L6-03"]},
+    "6决.1": {"sub": "一(3)", "points": ["L2-02"]},
+    "6决.3": {"sub": "三",   "points": ["L5-02"]},
+    "7决.1": {"sub": "一(4)", "points": ["L5-01", "L1-01"]},
+    "7决.4": {"sub": "四",   "points": ["L2-04"]},
+    "8决.1": {"sub": "一(3)", "points": ["L2-05", "L2-04"]},
+    "8决.5": {"sub": "五",   "points": ["L1-03", "L2-02"]},
+    "9决.1": {"sub": "一(5)", "points": ["L1-01"]},
+    "10决.1": {"sub": "一(5)", "points": ["L6-01"]},
+    "10决.6": {"sub": "六",   "points": ["L5-02", "L2-04"]},
+    "11决.5": {"sub": "五",   "points": ["L6-03", "L1-01"]},
+    "12决.1": {"sub": "一(4)", "points": ["L2-03"]},
+    "12决.5": {"sub": "五",   "points": ["L5-03"]},
+    "13决.7": {"sub": "七",   "points": ["L2-04", "L3-04"]},
+    "14决.2": {"sub": "二",   "points": ["L6-02"]},
+    "15决.5": {"sub": "五",   "points": ["L5-02"]},
+    "16A决.5": {"sub": "五",   "points": ["L6-03", "L6-01"]},
+    "16B决.6": {"sub": "六",   "points": ["L6-03"]},
+    "17A决.5": {"sub": "五",   "points": ["L6-02"]},
+    "17B决.6": {"sub": "六",   "points": ["L6-02"]},
 }
 # 线性代数模块完全由上面的清单驱动，禁止自动打标签，避免把非线代题误挂进来。
 NO_AUTO_MODULES = {"L1", "L2", "L3", "L4", "L5", "L6"}
@@ -318,11 +322,11 @@ def parse_refs(doc):
     sol_of, q_of = {}, {}
     for i in range(4, 101):  # 题目部分 PDF 页 5..101
         t = clean(doc[i].get_text()).replace("\n", " ")
-        for m in re.finditer(r"参考解答\s*\((\d{2}\.\d+)\)\s*第\s*(\d+)\s*页", t):
+        for m in re.finditer(r"参考解答\s*\(([^()\s]+)\)\s*第\s*(\d+)\s*页", t):
             sol_of[m.group(1)] = int(m.group(2))
     for i in range(101, doc.page_count):  # 解答部分 PDF 页 102..318
         t = clean(doc[i].get_text()).replace("\n", " ")
-        for m in re.finditer(r"返回题目\s*\((\d{2}\.\d+)\)\s*第\s*(\d+)\s*页", t):
+        for m in re.finditer(r"返回题目\s*\(([^()\s]+)\)\s*第\s*(\d+)\s*页", t):
             q_of[m.group(1)] = int(m.group(2))
     return sol_of, q_of
 
@@ -331,8 +335,8 @@ def parse_refs(doc):
 def flat_lines(doc, start, end):
     out = []
     for pno in range(start, end + 1):  # 1-based
-        for ln in page_text_lines(doc[pno - 1]):
-            out.append((pno, ln))
+        for y, ln in page_text_lines(doc[pno - 1]):
+            out.append((pno, y, ln))
     return out
 
 
@@ -361,39 +365,84 @@ def points_of(heading):
     return int(m.group(1)) if m else None
 
 
+MARK_A = re.compile(r"^参考解答\s*\((.+)\)$")
+MARK_B = re.compile(r"^返回题目\s*\((.+)\)$")
+
+
+def collect_marks(doc, p_from, p_to, pat):
+    """页面上的锚点：[(页, y, 标签)]。按位置取，不依赖文本流顺序
+    —— 改标号时新绘制的文字会被追加到页尾流里，顺序不再等于版面顺序。"""
+    out = []
+    for pno in range(p_from, p_to + 1):
+        for b in doc[pno - 1].get_text("dict")["blocks"]:
+            if b["type"] != 0:
+                continue
+            for l in b["lines"]:
+                t = norm_text("".join(s["text"] for s in l["spans"])).strip()
+                m = pat.match(t)
+                if m:
+                    out.append((pno, l["bbox"][1], m.group(1)))
+    return out
+
+
+def nearest_mark(marks, page, y, tol=14.0):
+    best = None
+    for pno, my, lab in marks:
+        if pno != page:
+            continue
+        d = abs(my - y)
+        if d < tol and (best is None or d < best[0]):
+            best = (d, lab)
+    return best[1] if best else None
+
+
+def norm_code(s):
+    """标号归一化：PDF 抽出的文本经 NFKC 后「（补1）」会变成「(补1)」。"""
+    return norm_text(s)
+
+
+def paper_of(papers, code):
+    for p in papers:
+        if norm_code(p["code"]) == norm_code(code):
+            return p
+    return None
+
+
 def parse_questions(doc, papers, sol_of, q_of):
     qlines = flat_lines(doc, 5, 100)
-    heads = [i for i, (_, l) in enumerate(qlines) if heading_of(l)]
+    heads = [i for i, (_, _y, l) in enumerate(qlines) if heading_of(l)]
     assert len(heads) == 272, f"题目标题 {len(heads)} 个，应为 272"
 
-    by_code = {p["code"]: p for p in papers}
+    marks = collect_marks(doc, 5, 100, MARK_A)
     questions = []
     for n, st in enumerate(heads):
         en = heads[n + 1] if n + 1 < len(heads) else len(qlines)
-        heading = qlines[st][1]
-        page = qlines[st][0]
-        block = [qlines[j][1] for j in range(st + 1, en)]
-        raw = "\n".join(block)
-        m = re.search(r"参考解答\s*\((\d{2}\.\d+)\)", raw)
-        if not m:
+        heading = qlines[st][2]
+        page, hy = qlines[st][0], qlines[st][1]
+        block = [qlines[j][2] for j in range(st + 1, en)]
+        label = nearest_mark(marks, page, hy)
+        if not label:
+            m = re.search(r"参考解答\s*\((.+?)\)", "\n".join(block))
+            label = m.group(1) if m else None
+        if not label:
             continue
-        label = m.group(1)
-        code = label.split(".")[0]
-        paper = by_code[code]
+        code, _, num = label.rpartition(".")
+        paper = paper_of(papers, code)
+        if not paper:
+            raise SystemExit(f"未知试卷标号 {code}（来自 {label}），请检查 paper_codes.json")
+        qid = f'{paper["code"]}.{num}'      # 统一用 papers_source 里的全角写法
         stem = tidy(block)
-        s_sol = sol_of.get(label, paper["solutionPage"])
-        s_q = q_of.get(label, page)
         qtype = "填空题" if "填空" in heading else ("证明题" if "证明" in stem[:400] else "解答题")
         questions.append({
-            "id": label,
+            "id": qid,
             "paperId": paper["id"],
-            "num": int(label.split(".")[1]),
+            "num": int(num),
             "cnNum": heading_of(heading),
             "heading": heading,
             "points": points_of(heading),
             "type": qtype,
-            "questionPage": s_q,
-            "solutionPage": s_sol,
+            "questionPage": q_of.get(label, paper["questionPage"]),
+            "solutionPage": sol_of.get(label, paper["solutionPage"]),
             "year": paper["year"],
             "edition": paper["edition"],
             "stage": paper["stage"],
@@ -403,17 +452,20 @@ def parse_questions(doc, papers, sol_of, q_of):
         })
     assert len(questions) == 272, f"题目 {len(questions)} 道，应为 272"
 
-    # 解答摘要：按「返回题目(xx.y)」锚点切分解答部分
-    slines = flat_lines(doc, 102, doc.page_count)
-    anchors = [(i, re.search(r"返回题目\s*\((\d{2}\.\d+)\)", l).group(1))
-               for i, (_, l) in enumerate(slines)
-               if re.search(r"返回题目\s*\((\d{2}\.\d+)\)", l)]
-    sol_text = {}
-    for n, (pos, label) in enumerate(anchors):
-        end = anchors[n + 1][0] if n + 1 < len(anchors) else len(slines)
-        sol_text[label] = tidy([slines[j][1] for j in range(pos + 1, end)], 900)
+    # 解答摘要：按「返回题目(x.y)」锚点的版面位置分段
+    # （锚点文字在文本流末尾，不能靠行号切；改按 (页, y) 二分定位，正文行序保持原样）
+    smarks = collect_marks(doc, 102, doc.page_count, MARK_B)
+    smarks.sort(key=lambda x: (x[0], x[1]))
+    keys = [(p, y) for p, y, _ in smarks]
+    buckets = defaultdict(list)
+    for pn, y, t in flat_lines(doc, 102, doc.page_count):
+        if is_noise(t):
+            continue
+        i = bisect.bisect_right(keys, (pn, y)) - 1
+        if i >= 0:
+            buckets[norm_code(smarks[i][2])].append(t)
     for q in questions:
-        q["solution"] = sol_text.get(q["id"], "")
+        q["solution"] = tidy(buckets.get(norm_code(q["id"]), []), 900)
     return questions
 
 
@@ -431,8 +483,8 @@ BODY_TOP, BODY_BOT = 86.0, 795.0
 
 def build_boxes(doc, papers, questions):
     MARK = {
-        "q": re.compile(r"参考解答\s*\((\d{2}\.\d+)\)"),
-        "s": re.compile(r"返回题目\s*\((\d{2}\.\d+)\)"),
+        "q": re.compile(r"参考解答\s*\((.+)\)$"),
+        "s": re.compile(r"返回题目\s*\((.+)\)$"),
     }
     cache = {}
 
@@ -471,7 +523,7 @@ def build_boxes(doc, papers, questions):
         mk.sort(key=lambda x: (x[0], x[1]))
 
         for i, (pno, y, label) in enumerate(mk):
-            paper = next((p for p in papers if p["code"] == label.split(".")[0]), None)
+            paper = paper_of(papers, label.split(".")[0])
             lim = (paper["questionEnd"] if kind == "q" else paper["solutionEnd"]) \
                 if paper else doc.page_count
             if i + 1 < len(mk):
@@ -497,7 +549,7 @@ def build_boxes(doc, papers, questions):
                 boxes[label][kind] = segs
 
     for q in questions:
-        b = boxes.get(q["id"], {})
+        b = boxes.get(norm_code(q["id"]), {})
         q["qSegs"] = b.get("q", [])
         q["sSegs"] = b.get("s", [])
         # 小图预览：只取题目最上面若干磅，且切在行底，避免把一行截成两半
@@ -762,11 +814,18 @@ def build_cards(questions, syllabus):
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     doc = fitz.open(PDF_PATH)
-    papers = parse_toc(doc)
+    papers = json.load(open(PAPERS_PATH, encoding="utf-8"))
+    assert len(papers) == 42, f"papers_source.json 应有 42 套，实为 {len(papers)}"
     sol_of, q_of = parse_refs(doc)
-    print(f"双向索引: 参考解答 {len(sol_of)} 条 / 返回题目 {len(q_of)} 条")
+    n_mark = len(collect_marks(doc, 5, 100, MARK_A)) + len(collect_marks(doc, 102, doc.page_count, MARK_B))
+    print(f"版面锚点: {n_mark} 个（参考解答 + 返回题目）")
     questions = parse_questions(doc, papers, sol_of, q_of)
     build_boxes(doc, papers, questions)
+    for q in questions:
+        if q["qSegs"]:
+            q["questionPage"] = q["qSegs"][0][0]
+        if q["sSegs"]:
+            q["solutionPage"] = q["sSegs"][0][0]
     miss = [q["id"] for q in questions if not q["qSegs"] or not q["sSegs"]]
     print(f"单题区域: {len(questions) - len(miss)} / {len(questions)} 题已定位"
           + (f"；缺 {miss[:6]}" if miss else ""))
