@@ -127,8 +127,133 @@
     } catch (e) { return null; }
   }
 
-  class Viewer {
-    constructor(stage, toolbar, canvas, opts = {}) {
+  /* --------------------- 单题裁切：只显示这一题的版面 --------------------- */
+  // 数据里每道题都带 qSegs / sSegs = [[页码, y0, y1], ...]（PDF pt）。
+  // 这里把对应页面按固定倍率渲染一次并缓存，再从中裁出该题的横条，
+  // 跨页的题目会自动拼成多段竖排，因此不会再看到整页、也不会出现文本乱码。
+  const CROP_X0 = 50, CROP_X1 = 548;      // 版心横向范围（与 build_data.py 一致）
+  const PAGE_SCALE = 2.2;                 // 页面缓存渲染倍率
+  const PAGE_CACHE_MAX = 8;
+  let PAGE_W_PT = 595.28;
+  const pageCache = new Map();
+
+  async function pageCanvas(pno) {
+    const hit = pageCache.get(pno);
+    if (hit) { hit.t = Date.now(); return hit.c; }
+    const doc = await loadPdf();
+    const page = await doc.getPage(pno);
+    const base = page.getViewport({ scale: 1 });
+    PAGE_W_PT = base.width;
+    const vp = page.getViewport({ scale: PAGE_SCALE });
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(vp.width);
+    c.height = Math.ceil(vp.height);
+    const g = c.getContext('2d', { alpha: false });
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: g, viewport: vp }).promise;
+    pageCache.set(pno, { c, t: Date.now() });
+    if (pageCache.size > PAGE_CACHE_MAX) {
+      let oldest = null;
+      for (const kv of pageCache) if (!oldest || kv[1].t < oldest[1].t) oldest = kv;
+      if (oldest) pageCache.delete(oldest[0]);
+    }
+    return c;
+  }
+
+  /** 把若干段 [页, y0, y1] 依次画成画布，竖排进 host */
+  async function renderSegs(host, segs, owner, token) {
+    host.innerHTML = '';
+    if (!segs || !segs.length) {
+      host.innerHTML = '<div class="sq-empty">这一题在 PDF 中的位置未能定位，请切到「整卷」查看。</div>';
+      return;
+    }
+    const boxes = segs.map(([p, y0, y1]) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'sq-seg';
+      const cv = document.createElement('canvas');
+      cv.className = 'sq-canvas';
+      cv.style.aspectRatio = `${CROP_X1 - CROP_X0} / ${Math.max(1, y1 - y0)}`;
+      wrap.appendChild(cv);
+      const tag = document.createElement('span');
+      tag.className = 'sq-pg';
+      tag.textContent = `P${p}`;
+      wrap.appendChild(tag);
+      host.appendChild(wrap);
+      return { wrap, cv, p, y0, y1 };
+    });
+    for (let i = 0; i < boxes.length; i++) {
+      const b = boxes[i];
+      let src;
+      try {
+        src = await pageCanvas(b.p);
+      } catch (e) {
+        b.wrap.classList.add('sq-fail');
+        b.wrap.innerHTML = `<div class="sq-empty">第 ${b.p} 页渲染失败（请用 HTTP 方式打开本站）</div>`;
+        continue;
+      }
+      if (owner.__sqTok !== token) return;
+      const k = src.width / PAGE_W_PT;
+      const sx = CROP_X0 * k, sy = b.y0 * k;
+      const sw = (CROP_X1 - CROP_X0) * k, sh = (b.y1 - b.y0) * k;
+      b.cv.width = Math.max(1, Math.round(sw));
+      b.cv.height = Math.max(1, Math.round(sh));
+      b.cv.style.aspectRatio = '';
+      const g = b.cv.getContext('2d', { alpha: false });
+      g.fillStyle = '#fff';
+      g.fillRect(0, 0, b.cv.width, b.cv.height);
+      g.drawImage(src, sx, sy, sw, sh, 0, 0, b.cv.width, b.cv.height);
+      b.wrap.classList.add('ready');
+    }
+  }
+
+  /**
+   * 渲染「只显示这一题」的阅读视图（题目 + 解答两段）。
+   * mode: 'question' | 'solution' | 'both'（只影响滚动定位，两段都会给出）
+   */
+  async function showQuestion(host, q, mode) {
+    const token = (host.__sqTok = (host.__sqTok || 0) + 1);
+    const p = P[pad2(q.paperId)] || {};
+    const multi = (q.qSegs || []).length + (q.sSegs || []).length > 2;
+    host.innerHTML = `
+      <div class="sq-head">
+        <div class="sq-title">
+          <span class="mono sq-id">${q.id}</span>
+          <b>第 ${q.cnNum} 题</b>
+          <span class="badge type">${q.type}</span>
+          ${q.points ? `<span class="badge">${q.points} 分</span>` : ''}
+          ${q.subLabel ? `<span class="tl-sub">${esc(q.subLabel)}</span>` : ''}
+        </div>
+        <div class="sq-sub">${p.year || ''} ${esc(p.short || '')} · 题目 P${q.questionPage} · 解答 P${q.solutionPage}
+          ${multi ? ' · 含跨页版面，已按顺序拼接' : ''}</div>
+      </div>
+      <section class="sq-block" data-block="q">
+        <div class="sq-cap"><span class="sq-dot" style="background:#8b7bff"></span>题目
+          <span class="sq-meta mono">P${q.questionPage}</span></div>
+        <div class="sq-segs" id="sqQ"></div>
+      </section>
+      <section class="sq-block" data-block="s">
+        <div class="sq-cap"><span class="sq-dot" style="background:#35d0a5"></span>参考解答
+          <span class="sq-meta mono">P${q.solutionPage}</span></div>
+        <div class="sq-segs" id="sqS"></div>
+      </section>
+      <div class="sq-foot">
+        <a class="btn sm" href="assets/cmc-papers.pdf#page=${q.questionPage}" target="_blank" rel="noopener">PDF 原件 P${q.questionPage} ↗</a>
+        ${q.topics && q.topics.length ? `<a class="btn sm ghost" href="#/topic/${q.topics[0]}">关联考点 →</a>` : ''}
+      </div>`;
+    await renderSegs(host.querySelector('#sqQ'), q.qSegs, host, token);
+    if (host.__sqTok !== token) return;
+    await renderSegs(host.querySelector('#sqS'), q.sSegs, host, token);
+    if (host.__sqTok !== token) return;
+    if (mode === 'question' || mode === 'solution') {
+      const el = host.querySelector(`[data-block="${mode === 'solution' ? 's' : 'q'}"]`);
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    } else if (host.scrollTo) {
+      host.scrollTo({ top: 0 });
+    }
+  }
+
+  class Viewer {    constructor(stage, toolbar, canvas, opts = {}) {
       this.stage = stage; this.toolbar = toolbar; this.canvas = canvas;
       this.page = 1; this.zoom = 1; this.token = 0;
       this.ctx = null;   // {mode, questionPage, solutionPage, label, title}
@@ -308,6 +433,7 @@
     if (!drawer.classList.contains('open')) {
       drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false');
     }
+    $('#drawerPanel').classList.remove('crop');
     $('#drawerTitle').textContent = title || 'PDF 阅读器';
     $('#drawerSub').textContent = sub || '';
     drawerViewer.go(page, ctx || null);
@@ -324,13 +450,38 @@
     return { mode, questionPage: q.questionPage, solutionPage: q.solutionPage,
       label: q.id, title: `${P[pad2(q.paperId)].short} · 第 ${q.cnNum} 题` };
   }
+
+  /* 抽屉里的单题视图：默认只显示这一题的题目 + 解答，可切回所在原页 */
+  let drawerQ = null;
   function openQuestion(q, mode = 'question', viaDrawer = true) {
-    if (viaDrawer) {
-      openPdf(mode === 'solution' ? q.solutionPage : q.questionPage, qCtx(q, mode),
-        `${q.id} · ${mode === 'solution' ? '参考解答' : '题目版'}`,
-        `${P[pad2(q.paperId)].year} ${P[pad2(q.paperId)].short} · 第 ${q.cnNum} 题 · PDF 第 ${mode === 'solution' ? q.solutionPage : q.questionPage} 页`);
+    if (!viaDrawer || !q) return;
+    drawerQ = q;
+    const p = P[pad2(q.paperId)] || {};
+    if (!drawer.classList.contains('open')) {
+      drawer.classList.add('open'); drawer.setAttribute('aria-hidden', 'false');
     }
+    $('#drawerPanel').classList.add('crop');
+    $('#drawerTitle').textContent = `${q.id} · 第 ${q.cnNum} 题`;
+    $('#drawerSub').textContent = `${p.year || ''} ${p.short || ''} · ${q.type}${q.points ? ` · ${q.points} 分` : ''}`;
+    $('#drawerBar').innerHTML = `
+      <button class="btn sm on" data-pane="${mode === 'solution' ? 's' : 'q'}">${mode === 'solution' ? '看解答' : '看题目'}</button>
+      <button class="btn sm" data-pane="${mode === 'solution' ? 'q' : 's'}">${mode === 'solution' ? '看题目' : '看解答'}</button>
+      <span class="sp"></span>
+      <button class="btn sm ghost" data-orig="${mode === 'solution' ? q.solutionPage : q.questionPage}">查看原页 ↗</button>`;
+    document.body.style.overflow = 'hidden';
+    showQuestion($('#drawerBody'), q, mode);
   }
+  $('#drawerBar').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b || !drawerQ) return;
+    if (b.dataset.orig) {
+      openPdf(Number(b.dataset.orig), qCtx(drawerQ, 'question'), `${drawerQ.id} · 原页`,
+        `${P[pad2(drawerQ.paperId)].year} ${P[pad2(drawerQ.paperId)].short} · PDF 第 ${b.dataset.orig} 页`);
+      return;
+    }
+    const block = $('#drawerBody').querySelector(`[data-block="${b.dataset.pane}"]`);
+    $$('#drawerBar [data-pane]').forEach(x => x.classList.toggle('on', x === b));
+    if (block) $('#drawerBody').scrollTo({ top: block.offsetTop - 8, behavior: 'smooth' });
+  });
 
   /* ----------------------------- 知识卡片组件 ----------------------------- */
   function mathHTML(latex, extraClass = '') {
@@ -591,7 +742,7 @@
       <div class="split">
         <div>
           <div class="card-head" style="padding:0 2px"><h3>试题列表 <span class="muted mono" style="font-size:11px">${qs.length} 题</span></h3>
-            <span class="hint">点击「题目 / 解答」切换右侧页面</span></div>
+            <span class="hint">点卡片看这一题的题目与解答</span></div>
           <div class="q-list" id="qList">${qs.map(q => `
             <div class="q-item" data-q="${q.id}">
               <div class="qi-top">
@@ -612,31 +763,60 @@
               </div>
             </div>`).join('')}</div>
         </div>
-        <div class="viewer card" style="padding:0;overflow:hidden">
-          <div class="card-head" style="padding:14px 16px 10px;margin:0">
-            <h3>原卷阅读器 <span class="hint">PDF 高保真渲染</span></h3>
-            <span class="hint" id="viewerLabel">—</span>
+        <div class="viewer card" id="qViewer" style="padding:0;overflow:hidden">
+          <div class="card-head" style="padding:12px 16px 10px;margin:0">
+            <h3>单题阅读 <span class="hint">原卷裁切 · 只显示这一题</span></h3>
+            <div class="seg-toggle" id="pvToggle">
+              <button data-m="crop" class="on">单题</button>
+              <button data-m="page">整卷</button>
+            </div>
           </div>
-          <div class="pdf-toolbar" id="inlineToolbar"></div>
-          <div class="pdf-stage" id="inlineStage"><canvas id="inlineCanvas"></canvas></div>
+          <div class="sq-scroll" id="inlineQ"></div>
+          <div id="inlinePageWrap" hidden>
+            <div class="pdf-toolbar" id="inlineToolbar"></div>
+            <div class="pdf-stage" id="inlineStage"><canvas id="inlineCanvas"></canvas></div>
+          </div>
         </div>
       </div>`;
 
     const v = new Viewer($('#inlineStage'), $('#inlineToolbar'), $('#inlineCanvas'), { modeId: 'inlineMode' });
+    let pvMode = 'crop';
+    let current = null;
+
+    const setPane = m => {
+      pvMode = m;
+      $$('#pvToggle button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+      $('#inlineQ').hidden = m !== 'crop';
+      $('#inlinePageWrap').hidden = m !== 'page';
+      if (m === 'page' && current) {
+        v.go(current.mode === 'solution' ? current.q.solutionPage : current.q.questionPage, qCtx(current.q, current.mode));
+      }
+    };
     const select = (qid, mode) => {
       const q = Q[qid]; if (!q) return;
+      current = { q, mode };
       $$('.q-item').forEach(x => x.classList.toggle('active', x.dataset.q === qid));
-      $('#viewerLabel').textContent = `${q.id} · 第 ${q.cnNum} 题`;
-      v.go(mode === 'solution' ? q.solutionPage : q.questionPage, qCtx(q, mode));
+      setPane('crop');
+      showQuestion($('#inlineQ'), q, mode);
     };
     $('#qList').addEventListener('click', e => {
-      const b = e.target.closest('[data-open],[data-drawer]'); if (!b) return;
-      if (b.dataset.drawer) { openQuestion(Q[b.dataset.drawer], 'question'); return; }
-      select(b.dataset.open, b.dataset.mode);
+      const item = e.target.closest('.q-item'); if (!item) return;
+      const b = e.target.closest('[data-open],[data-drawer]');
+      if (b) {
+        if (b.dataset.drawer) { openQuestion(Q[b.dataset.drawer], 'question'); return; }
+        select(b.dataset.open, b.dataset.mode);
+        return;
+      }
+      select(item.dataset.q, 'both');
+    });
+    $('#pvToggle').addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      setPane(b.dataset.m);
     });
     $('#wholePaper').addEventListener('click', () => {
       $$('.q-item').forEach(x => x.classList.remove('active'));
-      $('#viewerLabel').textContent = '整卷 · 题目版';
+      current = null;
+      setPane('page');
       v.go(p.questionPage, null);
     });
     const initial = (focusQid && Q[focusQid] && Q[focusQid].paperId === p.id) ? focusQid : qs[0].id;

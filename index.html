@@ -65,7 +65,7 @@
 <!-- 全局 PDF 阅读器抽屉 -->
 <div class="drawer" id="drawer" aria-hidden="true">
   <div class="drawer-mask" data-close></div>
-  <section class="drawer-panel">
+  <section class="drawer-panel" id="drawerPanel">
     <div class="drawer-head">
       <div>
         <div class="drawer-title" id="drawerTitle">PDF 阅读器</div>
@@ -75,6 +75,8 @@
     </div>
     <div class="pdf-toolbar" id="drawerToolbar"></div>
     <div class="pdf-stage" id="drawerStage"><canvas id="drawerCanvas"></canvas></div>
+    <div class="sq-bar" id="drawerBar"></div>
+    <div class="sq-scroll" id="drawerBody"></div>
   </section>
 </div>
 

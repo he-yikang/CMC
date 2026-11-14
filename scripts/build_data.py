@@ -23,6 +23,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 from collections import Counter, defaultdict
 
 try:
@@ -48,6 +49,77 @@ def clean(s):
     """清理 PDF 文本中的控制字符与 LaTeX 字体残留。"""
     return (s.replace("\x00", "").replace("\x01", "")
              .replace("\x0c", "").replace("\ufeff", "").strip())
+
+
+# ---------------------------------------------------------------------------
+# 文本还原
+# 这份 PDF 由 LaTeX 生成，直接 get_text() 有两个严重问题：
+#   1. 数学字母是 Unicode「数学斜体」区（U+1D400 段），普通字体没有对应字形，
+#      浏览器里会渲染成一排豆腐块 —— 也就是页面上的「乱码」；
+#   2. 大号定界符来自 TeX 的 txexs 字体，被导出成 \x00…\x1b 控制字符。
+# 这里用 NFKC 把数学斜体折回 ASCII，并把控制字符映射回真正的括号。
+# ---------------------------------------------------------------------------
+CTRL_MAP = {
+    "\x00": "(", "\x01": ")",
+    "\x02": "[", "\x03": "]",
+    "\x08": "{", "\x09": "}",
+    "\x0c": "|",                 # 可延展竖线（绝对值 / 行列式），一段可能由多个字形拼成
+    "\x10": "(", "\x11": ")",
+    "\x12": "(", "\x13": ")",
+    "\x14": "[", "\x15": "]",
+    "\x1a": "{", "\x1b": "}",
+}
+
+# txexs / txsys 里用私用区码位表示「可延展括号」的上下/中间片段，
+# 浏览器没有这些字形，会显示成豆腐块；这里折成对应括号再去重。
+PIECE_MAP = {
+    "\uf8ee": "[", "\uf8ef": "[", "\uf8f0": "[",
+    "\uf8f1": "{", "\uf8f2": "{", "\uf8f3": "{", "\uf8f4": "{",
+    "\uf8f5": "(", "\uf8f6": "(", "\uf8f7": ")", "\uf8f8": ")",
+    "\uf8f9": "]", "\uf8fa": "]", "\uf8fb": "]",
+    "\uf8fc": "}", "\uf8fd": "}", "\uf8fe": "}", "\uf8ff": "}",
+}
+
+
+def norm_text(s):
+    """NFKC 折叠数学斜体/全角形式，并还原 TeX 的定界符片段。"""
+    s = unicodedata.normalize("NFKC", s)
+    out, last = [], None
+    for ch in s:
+        rep = PIECE_MAP.get(ch) or CTRL_MAP.get(ch)
+        if rep:
+            if last == rep:                 # 同一括号的多个片段只保留一个
+                continue
+            while out and out[-1] == " ":
+                out.pop()
+            out.append(rep)
+            last = rep
+            continue
+        if ord(ch) < 32:
+            continue
+        out.append(ch)
+        if ch.strip():
+            last = None
+    return "".join(out)
+
+
+def page_text_lines(page):
+    """按 PDF 内容流顺序取行（就是阅读顺序），并做字符还原。
+
+    只做「能确定正确」的还原：NFKC 折叠数学斜体、控制字符→括号。
+    不做上下标重建 —— 这份 PDF 的公式已被扁平化，硬猜上下标反而会
+    给出 e_x 这种错误写法，宁可在单题视图里直接显示原始版面。
+    """
+    out = []
+    for b in page.get_text("dict")["blocks"]:
+        if b["type"] != 0:
+            continue
+        for ln in b["lines"]:
+            t = norm_text("".join(s["text"] for s in ln["spans"]))
+            t = re.sub(r"[ \t]{2,}", " ", t).strip()
+            if t:
+                out.append(t)
+    return out
 
 
 NOISE = [
@@ -190,7 +262,10 @@ def tidy(lines, limit=1600):
         out.append(ln)
     text = "\n".join(out)
     text = re.sub(r"\n{3,}", "\n\n", text)
+    # 大括号分上下片段时会被拆成多行（「{」换行又是「{」），合并掉重复片段
+    text = re.sub(r"([{\[(\|])(?:\s*\n\s*)\1", r"\1", text)
     return text[:limit].strip()
+
 
 
 # ---------------------------------------------------------------- 1. 总目录
@@ -256,14 +331,26 @@ def parse_refs(doc):
 def flat_lines(doc, start, end):
     out = []
     for pno in range(start, end + 1):  # 1-based
-        for ln in clean(doc[pno - 1].get_text()).splitlines():
-            out.append((pno, ln.strip()))
+        for ln in page_text_lines(doc[pno - 1]):
+            out.append((pno, ln))
     return out
 
 
 def heading_of(line):
     m = re.match(r"^([一二三四五六七八九十]+)、", line)
     return m.group(1) if m else None
+
+
+def excerpt_of(stem, limit=150):
+    """列表里用的一行摘要：折成单行，超长时在词边界截断并加省略号。"""
+    one = re.sub(r"\s+", " ", stem).strip()
+    if len(one) <= limit:
+        return one
+    cut = one[:limit]
+    sp = cut.rfind(" ")
+    if sp > limit * 0.75:
+        cut = cut[:sp]
+    return cut.rstrip(" ,，、;；") + "…"
 
 
 def points_of(heading):
@@ -312,7 +399,7 @@ def parse_questions(doc, papers, sol_of, q_of):
             "stage": paper["stage"],
             "group": paper["group"],
             "stem": stem,
-            "excerpt": re.sub(r"\s+", " ", stem)[:150],
+            "excerpt": excerpt_of(stem),
         })
     assert len(questions) == 272, f"题目 {len(questions)} 道，应为 272"
 
@@ -327,6 +414,90 @@ def parse_questions(doc, papers, sol_of, q_of):
         sol_text[label] = tidy([slines[j][1] for j in range(pos + 1, end)], 900)
     for q in questions:
         q["solution"] = sol_text.get(q["id"], "")
+    return questions
+
+
+# --------------------------------------------------- 3b. 单题区域（裁切渲染用）
+# 「只看这一题」需要知道每题在 PDF 页面上占的那块矩形。
+# 每题块的起止由页眉右上角的双向索引锚点决定：
+#   题目页  「参考解答(01.2)」→ 该题从这里开始
+#   解答页  「返回题目(01.2)」→ 该题解答从这里开始
+# 一道题可能横跨多页，因此输出的是「段」列表：[[页码, y0, y1], ...]
+PX0, PX1 = 50.0, 548.0      # 正文横向范围（版心）
+BODY_TOP, BODY_BOT = 86.0, 795.0
+
+
+def build_boxes(doc, papers, questions):
+    MARK = {
+        "q": re.compile(r"参考解答\s*\((\d{2}\.\d+)\)"),
+        "s": re.compile(r"返回题目\s*\((\d{2}\.\d+)\)"),
+    }
+    cache = {}
+
+    def body(pno):
+        """[(y0, y1, text)]，按纵坐标排序；带 y1 便于算内容边界。"""
+        if pno in cache:
+            return cache[pno]
+        rows = []
+        for b in doc[pno - 1].get_text("dict")["blocks"]:
+            if b["type"] != 0:
+                continue
+            for l in b["lines"]:
+                t = norm_text("".join(s["text"] for s in l["spans"])).strip()
+                if t:
+                    rows.append((l["bbox"][1], l["bbox"][3], t))
+        rows.sort()
+        cache[pno] = rows
+        return rows
+
+    def ctop(pno):
+        ys = [y0 for y0, _y1, t in body(pno) if y0 >= BODY_TOP]
+        return min(ys) if ys else BODY_TOP
+
+    def cbot(pno):
+        ys = [y1 for y0, y1, _t in body(pno) if y0 < BODY_BOT]
+        return min(812.0, max(ys) + 6) if ys else 800.0
+
+    boxes = defaultdict(dict)
+    for kind in ("q", "s"):
+        mk = []
+        for pno in range(5, doc.page_count + 1):
+            for y0, _y1, t in body(pno):
+                m = MARK[kind].search(t)
+                if m:
+                    mk.append((pno, y0, m.group(1)))
+        mk.sort(key=lambda x: (x[0], x[1]))
+
+        for i, (pno, y, label) in enumerate(mk):
+            paper = next((p for p in papers if p["code"] == label.split(".")[0]), None)
+            lim = (paper["questionEnd"] if kind == "q" else paper["solutionEnd"]) \
+                if paper else doc.page_count
+            if i + 1 < len(mk):
+                p2, y2 = mk[i + 1][0], mk[i + 1][1]
+            else:
+                p2, y2 = pno, cbot(pno) + 7
+            # 不得越出本套试卷的页范围，否则会把下一套的卷头当成这题的内容
+            if p2 > lim:
+                p2, y2 = lim, cbot(lim) + 7
+
+            y0 = max(58.0, y - 7)
+            y1 = y2 - 7
+            segs = [[pno, y0, cbot(pno)]]
+            if p2 > pno:
+                for mid in range(pno + 1, p2):
+                    segs.append([mid, ctop(mid), cbot(mid)])
+                if y1 > ctop(p2) + 4:
+                    segs.append([p2, ctop(p2), y1])
+            else:
+                segs[0][2] = y1
+            segs = [[p, round(a, 1), round(b, 1)] for p, a, b in segs if b - a > 12]
+            if segs:
+                boxes[label][kind] = segs
+
+    for q in questions:
+        b = boxes.get(q["id"], {})
+        q["qSegs"] = b.get("q", [])
+        q["sSegs"] = b.get("s", [])
     return questions
 
 
@@ -378,6 +549,7 @@ def build_syllabus():
         for i, item in enumerate(mod["items"], 1):
             kws, seen = [], set()
             for kw, w in item["kw"]:
+                kw = norm_text(kw)          # 试题文本已归一化，关键词也要对齐
                 if kw == "∫":  # 单独积分号过于常见，直接忽略
                     continue
                 if kw in GENERIC:
@@ -577,6 +749,10 @@ def main():
     sol_of, q_of = parse_refs(doc)
     print(f"双向索引: 参考解答 {len(sol_of)} 条 / 返回题目 {len(q_of)} 条")
     questions = parse_questions(doc, papers, sol_of, q_of)
+    build_boxes(doc, papers, questions)
+    miss = [q["id"] for q in questions if not q["qSegs"] or not q["sSegs"]]
+    print(f"单题区域: {len(questions) - len(miss)} / {len(questions)} 题已定位"
+          + (f"；缺 {miss[:6]}" if miss else ""))
     syllabus = build_syllabus()
     topics = tag_questions(questions, syllabus)
     cards, card_types = build_cards(questions, syllabus)
