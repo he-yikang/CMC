@@ -670,5 +670,37 @@
   "questionEnd": 100,
   "solutionPage": 314,
   "solutionEnd": 318
+ },
+ {
+  "id": 43,
+  "seq": "43",
+  "code": "18A初",
+  "title": "2026 年第十八届初赛",
+  "short": "第十八届初赛",
+  "year": 2026,
+  "edition": 18,
+  "stage": "初赛",
+  "group": "A 类",
+  "groupRaw": "非数学A 类",
+  "questionPage": 319,
+  "questionEnd": 327,
+  "solutionPage": 319,
+  "solutionEnd": 327
+ },
+ {
+  "id": 44,
+  "seq": "44",
+  "code": "18B初",
+  "title": "2026 年第十八届初赛",
+  "short": "第十八届初赛",
+  "year": 2026,
+  "edition": 18,
+  "stage": "初赛",
+  "group": "B 类",
+  "groupRaw": "非数学B 类",
+  "questionPage": 328,
+  "questionEnd": 335,
+  "solutionPage": 328,
+  "solutionEnd": 335
  }
 ]

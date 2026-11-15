@@ -664,7 +664,7 @@
   function questionRows(qs, tableId, attr) {
     if (!qs.length) {
       return `<div class="card" id="${tableId}"><div class="empty" style="padding:36px 20px">
-        <span class="big">◌</span>该条目在 2009–2026 的 42 套试卷中未被单独命中</div></div>`;
+        <span class="big">◌</span>该条目在 2009–2026 的 ${meta.paperCount} 套试卷中未被单独命中</div></div>`;
     }
     return `<div class="card" id="${tableId}" style="padding:6px 14px">
       <table class="tbl"><thead><tr><th>题号</th><th>试卷</th><th>题型</th><th>题目</th><th>考点</th><th>题目页</th><th>解答页</th></tr></thead>
@@ -1029,7 +1029,7 @@
         <button class="hero-fx-toggle" type="button" title="暂停 / 播放背景动效" aria-label="暂停背景动效">⏸</button>
         <div class="eyebrow">Chinese Mathematics Competitions · Non-Math Track</div>
         <h1>全国大学生数学竞赛<br><em>历届真题 × 考纲知识地图</em></h1>
-        <p>第一至第十七届非数学类初赛、补赛与决赛：${meta.paperCount} 套试卷、${meta.questionCount} 道大题，
+        <p>第一至第十八届非数学类初赛、补赛与决赛：${meta.paperCount} 套试卷、${meta.questionCount} 道大题，
            按「标号.题号」双向索引题目与参考解答；知识地图并置两套考纲：
            <b style="color:var(--txt2)">高等数学</b> 9 个模块（${(meta.subjectStats['高等数学'] || {}).pointCount} 个考点）、
            <b style="color:var(--txt2)">线性代数</b> 6 个模块（${(meta.subjectStats['线性代数'] || {}).pointCount} 个考点），
@@ -1125,9 +1125,9 @@
     if (params && params.get('year')) paperFilter.year = params.get('year');
     const years = [...new Set(papers.map(p => p.year))].sort((a, b) => a - b);
     $view.innerHTML = `
-      <div class="page-head"><div class="eyebrow">Archive · 42 Papers</div>
+      <div class="page-head"><div class="eyebrow">Archive · ${meta.paperCount} Papers</div>
         <h1>历届真题</h1>
-        <p>2009—2026 年，第一至第十七届非数学类初赛、补赛与决赛。每套试卷均可逐题查看题目版与参考解答。</p></div>
+        <p>2009—2026 年，第一至第十八届非数学类初赛、补赛与决赛。每套试卷均可逐题查看题目版与参考解答（第 18 届为扫描版参考答案，题目与解答同页）。</p></div>
       <div class="filter-bar">
         <div class="filter-group" data-f="stage">${['全部', '初赛', '补赛', '决赛'].map(x => `<button data-v="${x}" class="${paperFilter.stage === x ? 'on' : ''}">${x}</button>`).join('')}</div>
         <div class="filter-group" data-f="group">${['全部', 'A 类', 'B 类', '不分 A/B'].map(x => `<button data-v="${x}" class="${paperFilter.group === x ? 'on' : ''}">${x}</button>`).join('')}</div>
@@ -1160,9 +1160,11 @@
   /* ----------------------------- 视图：试卷详情 ----------------------------- */
   /** 本套试卷的页序：[题目页...] + [参考解答页...]，整卷阅读只允许在这一串里走 */
   function paperSeq(p) {
-    const seq = [];
-    for (let i = p.questionPage; i <= p.questionEnd; i++) seq.push({ p: i, kind: 'q' });
-    for (let j = p.solutionPage; j <= p.solutionEnd; j++) seq.push({ p: j, kind: 's' });
+    const seq = [], seen = new Set();
+    // 第 18 届扫描卷的题目页与参考答案页是同一批页，去重避免整卷里翻两遍
+    const push = (i, kind) => { if (!seen.has(i)) { seen.add(i); seq.push({ p: i, kind }); } };
+    for (let i = p.questionPage; i <= p.questionEnd; i++) push(i, 'q');
+    for (let j = p.solutionPage; j <= p.solutionEnd; j++) push(j, 's');
     return seq;
   }
 
@@ -1968,7 +1970,7 @@
       color: t.color, href: `#/map?tab=cards&type=${t.id}`
     }));
     $view.innerHTML = `
-      <div class="page-head"><div class="eyebrow">Analytics · 272 Questions · ${meta.cardCount} Cards</div><h1>统计分析</h1>
+      <div class="page-head"><div class="eyebrow">Analytics · ${meta.questionCount} Questions · ${meta.cardCount} Cards</div><h1>统计分析</h1>
         <p>基于 ${papers.length} 套试卷 / ${questions.length} 道大题 / ${meta.cardCount} 张知识卡片的自动标注结果。一道题可归入多个考点与多张卡片，故分项总和大于试题数。</p></div>
       <div class="grid2">
         <div class="card"><div class="card-head"><h2>各模块题次</h2><span class="hint">高数 1–9 / 线代 1–6 · 点击前往</span></div>${hbars(modCounts, { click: true, labelWidth: 168 })}</div>

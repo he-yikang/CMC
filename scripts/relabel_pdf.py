@@ -28,6 +28,7 @@ from fontTools.varLib.instancer import instantiateVariableFont
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PDF = os.environ.get("CMC_PDF") or os.path.join(ROOT, "assets", "cmc-papers.pdf")
 CODES = os.path.join(ROOT, "scripts", "paper_codes.json")
+SCAN18 = os.path.join(ROOT, "assets", "source-18.pdf")   # 第 18 届初赛 A/B 类扫描件（17 页）
 VF = "C:/Windows/Fonts/NotoSansSC-VF.ttf"
 
 # 第 1 届决赛（卷序 24）不分 A/B 类：标号只写「1决」，原书印的
@@ -161,6 +162,9 @@ def main():
     # ---------- 1. 收集要改写的字段 ----------
     plan = []          # [(page_index, [redact_rects], [(x, y, text, size, color, align)])]
     char_pool = set("参考解答返回题目()（）、，。：；第套卷序标号试卷与组别初决补赛次交叉引用采用如表示这的一二三四五六七八九十非数学类AB0123456789. “”")
+    for _t in ("18A初 / 参考解答", "18B初 / 参考解答", "参考解答 / 18A初", "参考解答 / 18B初",
+               "2026 年第十八届初赛", "非数学A 类", "非数学B 类"):
+        char_pool.update(_t)
 
     for pno in range(5, src_pages + 1):          # 正文页
         page = doc[pno - 1]
@@ -370,6 +374,36 @@ def main():
             except Exception as e:
                 print("补链接失败 p%d: %s" % (i + 1, e))
     print("补回链接:", restored)
+
+    # ---------- 6. 第 18 届初赛 A/B 类扫描卷：保真追加到末尾 ----------
+    # 扫描件是「试卷参考答案」（题目与解答同页、纯图片无文字层），不拆版、不 OCR，
+    # 只在每页补与全卷一致的页眉，并在总目录补两行；追加到末尾可保持原有页码不变。
+    if os.path.exists(SCAN18):
+        scan = pymupdf.open(SCAN18)
+        n0 = doc.page_count
+        doc.insert_pdf(scan)
+        scan.close()
+        codes18 = ["18A初"] * 9 + ["18B初"] * 8
+        ink = (0.41, 0.45, 0.49)
+        for i, code in enumerate(codes18):
+            pg = doc[n0 + i]
+            d = Draw(pg, "Flbl", fp)
+            d.text(76, 40, f"{code} / 参考解答", 8, ink, "left")
+            d.text(548, 40, f"参考解答 / {code}", 8, ink, "right")
+        toc = doc[1]
+        dt = Draw(toc, "Flbl", fp)
+        for j, (code, group, pgno) in enumerate([
+            ("18A初", "非数学A 类", n0 + 1),
+            ("18B初", "非数学B 类", n0 + 10),
+        ]):
+            y = 556.9 + 16.9 * (j + 1)
+            dt.text(62, y, code, 9, ink, "left")
+            dt.text(112, y, "2026 年第十八届初赛", 9, ink, "left")
+            dt.text(207.9, y, group, 9, ink, "left")
+            dt.text(492.1, y, str(pgno), 9, ink, "right")
+            dt.text(532.9, y, str(pgno), 9, ink, "right")
+        print("追加扫描卷 %d 页（P%d–P%d），目录 +2 行" %
+              (len(codes18), n0 + 1, n0 + len(codes18)))
 
     doc.subset_fonts()
     doc.saveIncr() if False else doc.save(PDF + ".tmp", garbage=3, deflate=True)

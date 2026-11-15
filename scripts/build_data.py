@@ -3,12 +3,12 @@
 CMC 站点数据生成脚本
 --------------------------------
 输入:
-  assets/cmc-papers.pdf       （《全国大学生数学竞赛历届真题与详解》第一至第十七届）
+  assets/cmc-papers.pdf       （《全国大学生数学竞赛历届真题与详解》第一至第十八届）
   scripts/syllabus_source.json（高数 / 线代两套考纲的逐条转录 + 关键词规则）
   scripts/cards_source.json   （公式 / 定理 / 性质 / 解题方法 知识卡片库）
 输出:
-  assets/data/papers.json      42 套试卷元数据
-  assets/data/questions.json   272 道大题（题干、解答摘要、双向页码、考点、关联卡片）
+  assets/data/papers.json      44 套试卷元数据
+  assets/data/questions.json   284 道大题（题干、解答摘要、双向页码、考点、关联卡片）
   assets/data/syllabus.json    高等数学 9 模块 + 线性代数 6 模块 / 90 个知识点
   assets/data/topics.json      知识点 -> 试题的映射与统计
   assets/data/cards.json       98 张知识卡片及其关联真题
@@ -130,7 +130,7 @@ NOISE = [
     r"^20\d\d\s*年第", r"^全国大学生数学竞赛", r"^非数学", r"^考试形式",
     r"^考试时间", r"^满分[:：]", r"^题号$", r"^得分$", r"^注意[:：]",
     r"^密封线", r"^所有答题", r"^如答题空白", r"^第一部分$", r"^第二部分$",
-    r"^历届试题$", r"^第一至第十七届$", r"^42\s*套试卷$", r"^272\s*道大题$",
+    r"^历届试题$", r"^第一至第(十七|十八)届$", r"^\d+\s*套试卷$", r"^\d+\s*道大题$",
     r"^题目连续排版$", r"^非数学类·题目与详解$", r"^参考解答\s*\(",
     r"^返回题目\s*\(", r"^初赛、补赛与决赛$", r"^题目版\s*/\s*参考解答",
     r"^[一二三四五六七八九十\s]+总分$", r"^满分\s+\d", r"^[一二三四五六七八九十]$",
@@ -662,6 +662,9 @@ def build_syllabus():
 def tag_questions(questions, syllabus):
     kps = syllabus["points"]
     for q in questions:
+        if q.get("scanOnly"):
+            q["topics"] = []; q["topicHits"] = {}; q["confidence"] = "scan"
+            continue
         text = " ".join([q["heading"], q["stem"], q["solution"][:350]])
         scores, hits = {}, {}
         for kp in kps:
@@ -807,6 +810,9 @@ def build_cards(questions, syllabus):
     point_mod = {p["id"]: p["moduleId"] for p in syllabus["points"]}
     for q in questions:
         rel = []
+        if q.get("scanOnly"):
+            q["cardIds"] = []
+            continue
         for c in cards:
             s = card_score[c["id"]].get(q["id"], 0)
             w = (s + (12 if q["id"] in c["manualIds"] else 0)
@@ -832,12 +838,55 @@ def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     doc = fitz.open(PDF_PATH)
     papers = json.load(open(PAPERS_PATH, encoding="utf-8"))
-    assert len(papers) == 42, f"papers_source.json 应有 42 套，实为 {len(papers)}"
+    assert len(papers) == 44, f"papers_source.json 应有 44 套，实为 {len(papers)}"
     sol_of, q_of = parse_refs(doc)
     n_mark = len(collect_marks(doc, 5, 100, MARK_A)) + len(collect_marks(doc, 102, doc.page_count, MARK_B))
     print(f"版面锚点: {n_mark} 个（参考解答 + 返回题目）")
     questions = parse_questions(doc, papers, sol_of, q_of)
     build_boxes(doc, papers, questions)
+
+    # 第 18 届初赛 A/B 类：扫描卷是「试卷参考答案」（题目与解答同页、无文字层），
+    # 不走锚点解析，按目视确认的页码分布登记 6 道大题；不做 OCR 与考点自动标注。
+    SCAN18_GROUPS = {
+        "18A初": (43, "A 类", [[319, 320], [321], [322], [323, 324], [325], [326, 327]]),
+        "18B初": (44, "B 类", [[328, 329], [330], [331], [332], [333, 334], [335]]),
+    }
+    SCAN18_STEM = {
+        "18A初": ["填空题（5 小题，涉及极限、分段函数连续性、对称点、偏导数与数列极限）",
+                  "二元函数 f(x,y) 在 (0,0) 邻域连续，讨论偏导数存在性",
+                  "求解微分方程 x²y''+xy'=y²ln x (x>0)",
+                  "球面面积 S(r) 与两球公共部分体积",
+                  "有界二阶可导函数，证明存在 ξ 使 f''(ξ)=0",
+                  "幂级数求和函数与收敛域"],
+        "18B初": ["填空题（5 小题，涉及极限、分段函数连续性、对称点、二重积分与偏导数）",
+                  "由 lim f(x)∫₀ˣf(t)dt=2 求 lim √x f(x)",
+                  "曲线切线围成图形绕 x 轴旋转体的体积",
+                  "求解微分方程 x²y''+xy'=y²ln x (x>0)",
+                  "幂级数收敛域与和函数",
+                  "有界二阶可导函数，证明存在 ξ 使 f''(ξ)+f'(ξ)=0"],
+    }
+    CN6 = ["一", "二", "三", "四", "五", "六"]
+    for code, (pid, grp, groups) in SCAN18_GROUPS.items():
+        for n, pgs in enumerate(groups, 1):
+            pts = 30 if n == 1 else 14
+            head = ("一、填空题（本题 30 分，每小题 6 分）" if n == 1
+                    else "%s、（本题满分 14 分）" % CN6[n - 1])
+            stem = SCAN18_STEM[code][n - 1]
+            note = "扫描卷「试卷参考答案」，题目与参考解答同页；公式与图形以 PDF 原卷为准。"
+            segs = [[p, 40, 815] for p in pgs]
+            questions.append({
+                "id": "%s.%d" % (code, n), "paperId": pid, "num": n, "cnNum": CN6[n - 1],
+                "heading": head, "points": pts,
+                "type": "填空题" if n == 1 else "解答题",
+                "questionPage": pgs[0], "solutionPage": pgs[0],
+                "year": 2026, "edition": 18, "stage": "初赛", "group": grp,
+                "stem": stem + "。" + note, "excerpt": stem, "solution": "",
+                "topics": [], "topicHits": {}, "cardIds": [], "confidence": "scan",
+                "qSegs": segs, "sSegs": segs,
+                "thumb": [pgs[0], 40, 192], "thumbS": [pgs[0], 40, 128],
+                "subLabel": "题目与参考答案同页", "scanOnly": True,
+            })
+
     for q in questions:
         if q["qSegs"]:
             q["questionPage"] = q["qSegs"][0][0]
@@ -889,7 +938,7 @@ def main():
         "yearMax": max(p["year"] for p in papers),
         "pageCount": doc.page_count,
         "pdf": "assets/cmc-papers.pdf",
-        "pdfTitle": "全国大学生数学竞赛历届真题与详解（第一至第十七届·非数学类）",
+        "pdfTitle": "全国大学生数学竞赛历届真题与详解（第一至第十八届·非数学类）",
         "note": "试题以 PDF 原件为准；文本抽取仅用于检索与自动标注，公式可能扁平化。",
     }
 
