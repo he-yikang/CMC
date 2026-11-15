@@ -410,28 +410,10 @@ def main():
                 print("补链接失败 p%d: %s" % (i + 1, e))
     print("补回链接:", restored)
 
-    # ---------- 6. 第 18 届初赛 A/B 类：插入按全卷版式重排的正式页面 ----------
-    # exam18.pdf 由 scripts/build_exam18.py 生成（KaTeX 排版，题目版 / 参考解答版分开，
-    # 页眉与双向页码已就位）；追加到末尾以保持原有页码不变，总目录补两行。
-    if os.path.exists(EXAM18) and os.path.exists(PAGES18):
-        pages18 = json.load(open(PAGES18, encoding="utf-8"))
-        src = pymupdf.open(EXAM18)
-        n0 = doc.page_count
-        doc.insert_pdf(src)
-        src.close()
-        toc = doc[1]
-        dt = Draw(toc, "Flbl", fp)
-        ink = (0.41, 0.45, 0.49)
-        for j, code in enumerate(("18A初", "18B初")):
-            r = pages18["ranges"][code]
-            y = 556.9 + 16.9 * (j + 1)
-            dt.text(62, y, code, 9, ink, "left")
-            dt.text(112, y, "2026 年第十八届初赛", 9, ink, "left")
-            dt.text(207.9, y, "非数学A 类" if j == 0 else "非数学B 类", 9, ink, "left")
-            dt.text(492.1, y, str(r["questionPage"]), 9, ink, "right")
-            dt.text(532.9, y, str(r["solutionPage"]), 9, ink, "right")
-        print("插入重排版 %d 页（P%d–P%d），目录 +2 行" %
-              (pages18["total"], n0 + 1, n0 + pages18["total"]))
+    # ---------- 6. 第 18 届初赛 A/B 类的插页 ----------
+    # 不在本脚本插入：改写完成后由 place_exam18.py 按原书结构
+    # （题目段插在初赛题目末页之后、解答段插在初赛解答末页之后）插入，
+    # 并统一重映射印刷页码、目录页码与链接目标。这里只产出 318 页基础 PDF。
 
     doc.subset_fonts()
     doc.saveIncr() if False else doc.save(PDF + ".tmp", garbage=3, deflate=True)

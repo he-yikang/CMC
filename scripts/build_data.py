@@ -332,6 +332,37 @@ def parse_refs(doc):
 
 
 # --------------------------------------------------------------- 3. 切分题目
+# 原书页序（插页前）：初赛题目 5–54 / 决赛题目 55–100；
+# 初赛解答 102–196 / 决赛解答 197–318。第 18 届插在两段之间后，
+# 原书页被切成不连续的两段，解析 272 道原题时必须跳过新增页。
+ORIG_Q = [(5, 54), (55, 100)]
+ORIG_S = [(102, 196), (197, 318)]
+
+
+def shifted_ranges(ranges, q_count, s_count):
+    def sh(p):
+        if p <= 54:
+            return p
+        if p <= 196:
+            return p + q_count
+        return p + q_count + s_count
+    return [(sh(a), sh(b)) for a, b in ranges]
+
+
+def multi_lines(doc, ranges):
+    out = []
+    for a, b in ranges:
+        out += flat_lines(doc, a, b)
+    return out
+
+
+def multi_marks(doc, ranges, pat):
+    out = []
+    for a, b in ranges:
+        out += collect_marks(doc, a, b, pat)
+    return out
+
+
 def flat_lines(doc, start, end):
     out = []
     for pno in range(start, end + 1):  # 1-based
@@ -408,12 +439,12 @@ def paper_of(papers, code):
     return None
 
 
-def parse_questions(doc, papers, sol_of, q_of):
-    qlines = flat_lines(doc, 5, 100)
+def parse_questions(doc, papers, sol_of, q_of, qranges, sranges):
+    qlines = multi_lines(doc, qranges)
     heads = [i for i, (_, _y, l) in enumerate(qlines) if heading_of(l)]
     assert len(heads) == 272, f"题目标题 {len(heads)} 个，应为 272"
 
-    marks = collect_marks(doc, 5, 100, MARK_A)
+    marks = multi_marks(doc, qranges, MARK_A)
     questions = []
     for n, st in enumerate(heads):
         en = heads[n + 1] if n + 1 < len(heads) else len(qlines)
@@ -454,11 +485,11 @@ def parse_questions(doc, papers, sol_of, q_of):
 
     # 解答摘要：按「返回题目(x.y)」锚点的版面位置分段
     # （锚点文字在文本流末尾，不能靠行号切；改按 (页, y) 二分定位，正文行序保持原样）
-    smarks = collect_marks(doc, 102, doc.page_count, MARK_B)
+    smarks = multi_marks(doc, sranges, MARK_B)
     smarks.sort(key=lambda x: (x[0], x[1]))
     keys = [(p, y) for p, y, _ in smarks]
     buckets = defaultdict(list)
-    for pn, y, t in flat_lines(doc, 102, doc.page_count):
+    for pn, y, t in multi_lines(doc, sranges):
         if is_noise(t):
             continue
         i = bisect.bisect_right(keys, (pn, y)) - 1
@@ -583,6 +614,57 @@ def build_boxes(doc, papers, questions):
             q["thumb"] = snap(THUMB_H)
             q["thumbS"] = snap(THUMB_H_S)
     return questions
+
+
+def snap_exam18_boxes(doc, questions):
+    """第 18 届重排版用 KaTeX，公式的上标/下标会形成 y0 略小于常规正文行的
+    独立文本行；统一的 ctop / y1 边界偶尔会把它们从中间切开（表现为公式
+    下标被裁掉、长行只剩上半截）。这里只对这 12 题按实际行框吸附一次，
+    其余 272 题沿用 build_boxes 的原有结果，不受影响。
+    """
+    cache = {}
+
+    def rows(pno):
+        if pno not in cache:
+            out = []
+            for b in doc[pno - 1].get_text("dict")["blocks"]:
+                if b["type"] != 0:
+                    continue
+                for l in b["lines"]:
+                    if "".join(sp["text"] for sp in l["spans"]).strip():
+                        out.append((l["bbox"][1], l["bbox"][3]))
+            cache[pno] = out
+        return cache[pno]
+
+    def snap(segs):
+        out = []
+        for pno, y0, y1 in segs:
+            for a, b in rows(pno):
+                if a < y0 < b - 1:
+                    y0 = min(y0, a - 2)
+                if a < y1 < b - 1:
+                    y1 = max(y1, b + 2)
+            out.append([pno, round(max(50.0, y0), 1), round(min(812.0, y1), 1)])
+        return out
+
+    for q in questions:
+        if not q["id"].startswith(("18A初.", "18B初.")):
+            continue
+        q["qSegs"] = snap(q["qSegs"])
+        q["sSegs"] = snap(q["sSegs"])
+        if q["qSegs"]:
+            pno, y0, y1 = q["qSegs"][0]
+            rr = rows(pno)
+
+            def sm(limit):
+                lim = min(y1, y0 + limit)
+                cand = [b for a, b in rr if a >= y0 - 1 and b <= lim + 5]
+                if cand:
+                    lim = min(y1, max(cand) + 3)
+                return [pno, y0, round(lim, 1)]
+
+            q["thumb"] = sm(THUMB_H)
+            q["thumbS"] = sm(THUMB_H_S)
 
 
 # --------------------------------------------------------------- 4. 考纲与标注
@@ -834,9 +916,15 @@ def main():
     papers = json.load(open(PAPERS_PATH, encoding="utf-8"))
     assert len(papers) == 44, f"papers_source.json 应有 44 套，实为 {len(papers)}"
     sol_of, q_of = parse_refs(doc)
-    n_mark = len(collect_marks(doc, 5, 100, MARK_A)) + len(collect_marks(doc, 102, doc.page_count, MARK_B))
-    print(f"版面锚点: {n_mark} 个（参考解答 + 返回题目）")
-    questions = parse_questions(doc, papers, sol_of, q_of)
+    P18CFG = json.load(open(os.path.join(ROOT, "scripts", "exam18_pages.json"),
+                            encoding="utf-8"))
+    QN = P18CFG["placement"]["q"]["count"]
+    SN = P18CFG["placement"]["s"]["count"]
+    qranges = shifted_ranges(ORIG_Q, QN, SN)
+    sranges = shifted_ranges(ORIG_S, QN, SN)
+    n_mark = len(multi_marks(doc, qranges, MARK_A)) + len(multi_marks(doc, sranges, MARK_B))
+    print(f"版面锚点: {n_mark} 个（参考解答 + 返回题目，原书页范围 {qranges} / {sranges}）")
+    questions = parse_questions(doc, papers, sol_of, q_of, qranges, sranges)
     # 第 18 届初赛 A/B 类：内容已按全卷版式重排（题目版 / 参考解答版分开），
     # 题目与解答文本取自完整转写稿，PDF 中的「参考解答(18A初.1)」「返回题目(…)」
     # 锚点与其余 42 套完全一致，因此统一交给 build_boxes() 按 y 坐标逐题精确切分，
@@ -845,8 +933,7 @@ def main():
     _sys.path.insert(0, os.path.join(ROOT, "scripts"))
     from exam18_content import EXAMS as EXAMS18, CN as CN6, question_texts
 
-    PAGES18 = json.load(open(os.path.join(ROOT, "scripts", "exam18_pages.json"),
-                             encoding="utf-8"))
+    PAGES18 = P18CFG
     for code, pid, grp in [("18A初", 43, "A 类"), ("18B初", 44, "B 类")]:
         r = PAGES18["ranges"][code]
         for item in EXAMS18[code]["questions"]:
@@ -870,6 +957,7 @@ def main():
 
     # 全部 284 道题统一按锚点切分 qSegs / sSegs / thumb
     build_boxes(doc, papers, questions)
+    snap_exam18_boxes(doc, questions)
 
     for q in questions:
         if q["qSegs"]:
@@ -925,6 +1013,11 @@ def main():
         "pdfTitle": "全国大学生数学竞赛历届真题与详解（第一至第十八届·非数学类）",
         "note": "试题以 PDF 原件为准；文本抽取仅用于检索与自动标注，公式可能扁平化。",
     }
+
+    # 站点「历届真题」列表按原书总目录顺序展示：初赛与补赛在前、决赛在后。
+    # 插页后 18 届初赛的 questionPage=55/57 落在 17B初(52) 与 1决(59) 之间，
+    # 因此按页序排序即可与其它卷一致（id 不变，路由仍用 id）。
+    papers.sort(key=lambda p: (p["questionPage"], p["id"]))
 
     def dump(name, obj):
         with open(os.path.join(OUT_DIR, name), "w", encoding="utf-8") as f:

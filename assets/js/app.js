@@ -1021,7 +1021,7 @@
     const hot = D.topics.filter(t => !(MOD[PT[t.id].moduleId] || {}).extra)
       .slice().sort((a, b) => b.count - a.count).slice(0, 10)
       .map(t => ({ label: `${PT[t.id].short}（${t.id}）`, value: t.count, href: `#/topic/${t.id}`, color: PT[t.id].color }));
-    const recent = papers.slice(-4).reverse();
+    const recent = [...papers].sort((a, b) => (b.year - a.year) || (b.edition - a.edition) || (b.questionPage - a.questionPage)).slice(0, 4);
 
     $view.innerHTML = `
       <div class="hero">
