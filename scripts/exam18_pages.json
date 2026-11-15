@@ -1,0 +1,30 @@
+{
+ "base": 319,
+ "starts": {
+  "18A初_q": 319,
+  "18A初_s": 321,
+  "18B初_q": 323,
+  "18B初_s": 325
+ },
+ "counts": {
+  "18A初_q": 2,
+  "18A初_s": 2,
+  "18B初_q": 2,
+  "18B初_s": 2
+ },
+ "total": 8,
+ "ranges": {
+  "18A初": {
+   "questionPage": 319,
+   "questionEnd": 320,
+   "solutionPage": 321,
+   "solutionEnd": 322
+  },
+  "18B初": {
+   "questionPage": 323,
+   "questionEnd": 324,
+   "solutionPage": 325,
+   "solutionEnd": 326
+  }
+ }
+}

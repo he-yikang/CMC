@@ -1127,7 +1127,7 @@
     $view.innerHTML = `
       <div class="page-head"><div class="eyebrow">Archive · ${meta.paperCount} Papers</div>
         <h1>历届真题</h1>
-        <p>2009—2026 年，第一至第十八届非数学类初赛、补赛与决赛。每套试卷均可逐题查看题目版与参考解答（第 18 届为扫描版参考答案，题目与解答同页）。</p></div>
+        <p>2009—2026 年，第一至第十八届非数学类初赛、补赛与决赛。每套试卷均可逐题查看题目版与参考解答（第 18 届按同一版式重排为题目版与参考解答版）。</p></div>
       <div class="filter-bar">
         <div class="filter-group" data-f="stage">${['全部', '初赛', '补赛', '决赛'].map(x => `<button data-v="${x}" class="${paperFilter.stage === x ? 'on' : ''}">${x}</button>`).join('')}</div>
         <div class="filter-group" data-f="group">${['全部', 'A 类', 'B 类', '不分 A/B'].map(x => `<button data-v="${x}" class="${paperFilter.group === x ? 'on' : ''}">${x}</button>`).join('')}</div>
@@ -1161,7 +1161,7 @@
   /** 本套试卷的页序：[题目页...] + [参考解答页...]，整卷阅读只允许在这一串里走 */
   function paperSeq(p) {
     const seq = [], seen = new Set();
-    // 第 18 届扫描卷的题目页与参考答案页是同一批页，去重避免整卷里翻两遍
+    // 页范围若有重叠则去重，避免整卷里把同一页翻两遍
     const push = (i, kind) => { if (!seen.has(i)) { seen.add(i); seq.push({ p: i, kind }); } };
     for (let i = p.questionPage; i <= p.questionEnd; i++) push(i, 'q');
     for (let j = p.solutionPage; j <= p.solutionEnd; j++) push(j, 's');

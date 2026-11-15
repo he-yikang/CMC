@@ -28,7 +28,9 @@ from fontTools.varLib.instancer import instantiateVariableFont
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PDF = os.environ.get("CMC_PDF") or os.path.join(ROOT, "assets", "cmc-papers.pdf")
 CODES = os.path.join(ROOT, "scripts", "paper_codes.json")
-SCAN18 = os.path.join(ROOT, "assets", "source-18.pdf")   # 第 18 届初赛 A/B 类扫描件（17 页）
+SCAN18 = os.path.join(ROOT, "assets", "source-18.pdf")   # 转录素材（不并入主 PDF）
+EXAM18 = os.path.join(ROOT, "assets", "exam18.pdf")       # 按全卷版式重排后的 8 页
+PAGES18 = os.path.join(ROOT, "scripts", "exam18_pages.json")
 VF = "C:/Windows/Fonts/NotoSansSC-VF.ttf"
 
 # 第 1 届决赛（卷序 24）不分 A/B 类：标号只写「1决」，原书印的
@@ -375,35 +377,28 @@ def main():
                 print("补链接失败 p%d: %s" % (i + 1, e))
     print("补回链接:", restored)
 
-    # ---------- 6. 第 18 届初赛 A/B 类扫描卷：保真追加到末尾 ----------
-    # 扫描件是「试卷参考答案」（题目与解答同页、纯图片无文字层），不拆版、不 OCR，
-    # 只在每页补与全卷一致的页眉，并在总目录补两行；追加到末尾可保持原有页码不变。
-    if os.path.exists(SCAN18):
-        scan = pymupdf.open(SCAN18)
+    # ---------- 6. 第 18 届初赛 A/B 类：插入按全卷版式重排的正式页面 ----------
+    # exam18.pdf 由 scripts/build_exam18.py 生成（KaTeX 排版，题目版 / 参考解答版分开，
+    # 页眉与双向页码已就位）；追加到末尾以保持原有页码不变，总目录补两行。
+    if os.path.exists(EXAM18) and os.path.exists(PAGES18):
+        pages18 = json.load(open(PAGES18, encoding="utf-8"))
+        src = pymupdf.open(EXAM18)
         n0 = doc.page_count
-        doc.insert_pdf(scan)
-        scan.close()
-        codes18 = ["18A初"] * 9 + ["18B初"] * 8
-        ink = (0.41, 0.45, 0.49)
-        for i, code in enumerate(codes18):
-            pg = doc[n0 + i]
-            d = Draw(pg, "Flbl", fp)
-            d.text(76, 40, f"{code} / 参考解答", 8, ink, "left")
-            d.text(548, 40, f"参考解答 / {code}", 8, ink, "right")
+        doc.insert_pdf(src)
+        src.close()
         toc = doc[1]
         dt = Draw(toc, "Flbl", fp)
-        for j, (code, group, pgno) in enumerate([
-            ("18A初", "非数学A 类", n0 + 1),
-            ("18B初", "非数学B 类", n0 + 10),
-        ]):
+        ink = (0.41, 0.45, 0.49)
+        for j, code in enumerate(("18A初", "18B初")):
+            r = pages18["ranges"][code]
             y = 556.9 + 16.9 * (j + 1)
             dt.text(62, y, code, 9, ink, "left")
             dt.text(112, y, "2026 年第十八届初赛", 9, ink, "left")
-            dt.text(207.9, y, group, 9, ink, "left")
-            dt.text(492.1, y, str(pgno), 9, ink, "right")
-            dt.text(532.9, y, str(pgno), 9, ink, "right")
-        print("追加扫描卷 %d 页（P%d–P%d），目录 +2 行" %
-              (len(codes18), n0 + 1, n0 + len(codes18)))
+            dt.text(207.9, y, "非数学A 类" if j == 0 else "非数学B 类", 9, ink, "left")
+            dt.text(492.1, y, str(r["questionPage"]), 9, ink, "right")
+            dt.text(532.9, y, str(r["solutionPage"]), 9, ink, "right")
+        print("插入重排版 %d 页（P%d–P%d），目录 +2 行" %
+              (pages18["total"], n0 + 1, n0 + pages18["total"]))
 
     doc.subset_fonts()
     doc.saveIncr() if False else doc.save(PDF + ".tmp", garbage=3, deflate=True)

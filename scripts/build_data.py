@@ -845,12 +845,12 @@ def main():
     questions = parse_questions(doc, papers, sol_of, q_of)
     build_boxes(doc, papers, questions)
 
-    # 第 18 届初赛 A/B 类：扫描卷是「试卷参考答案」（题目与解答同页、无文字层），
-    # 不走锚点解析，按目视确认的页码分布登记 6 道大题；不做 OCR 与考点自动标注。
-    SCAN18_GROUPS = {
-        "18A初": (43, "A 类", [[319, 320], [321], [322], [323, 324], [325], [326, 327]]),
-        "18B初": (44, "B 类", [[328, 329], [330], [331], [332], [333, 334], [335]]),
-    }
+    # 第 18 届初赛 A/B 类：内容已按全卷版式重排，不走文本锚点解析；
+    # 按题目版/解答版中的大题标题定位逐题页码，不做考点自动标注。
+    # 第 18 届初赛 A/B 类：内容已按全卷版式重排（题目版 / 参考解答版分开），
+    # 逐题页码按各版中「一、」「二、」…标题的实际所在页定位。
+    PAGES18 = json.load(open(os.path.join(ROOT, "scripts", "exam18_pages.json"),
+                             encoding="utf-8"))
     SCAN18_STEM = {
         "18A初": ["填空题（5 小题，涉及极限、分段函数连续性、对称点、偏导数与数列极限）",
                   "二元函数 f(x,y) 在 (0,0) 邻域连续，讨论偏导数存在性",
@@ -862,29 +862,34 @@ def main():
                   "由 lim f(x)∫₀ˣf(t)dt=2 求 lim √x f(x)",
                   "曲线切线围成图形绕 x 轴旋转体的体积",
                   "求解微分方程 x²y''+xy'=y²ln x (x>0)",
-                  "幂级数收敛域与和函数",
-                  "有界二阶可导函数，证明存在 ξ 使 f''(ξ)+f'(ξ)=0"],
+                  "幂级数 ∑xⁿ/n 与其平方的收敛域",
+                  "有界二阶可导函数，证明存在 ξ 使 f(ξ)+f''(ξ)=0"],
     }
     CN6 = ["一", "二", "三", "四", "五", "六"]
-    for code, (pid, grp, groups) in SCAN18_GROUPS.items():
-        for n, pgs in enumerate(groups, 1):
+    for code, pid, grp in [("18A初", 43, "A 类"), ("18B初", 44, "B 类")]:
+        r = PAGES18["ranges"][code]
+        for n in range(1, 7):
+            cn = CN6[n - 1]
+            qp = next((p for p in range(r["questionPage"], r["questionEnd"] + 1)
+                       if doc[p - 1].search_for(cn + "、")), r["questionPage"])
+            sp = next((p for p in range(r["solutionPage"], r["solutionEnd"] + 1)
+                       if doc[p - 1].search_for(cn + "、")), r["solutionPage"])
             pts = 30 if n == 1 else 14
             head = ("一、填空题（本题 30 分，每小题 6 分）" if n == 1
-                    else "%s、（本题满分 14 分）" % CN6[n - 1])
+                    else "%s、（本题满分 14 分）" % cn)
             stem = SCAN18_STEM[code][n - 1]
-            note = "扫描卷「试卷参考答案」，题目与参考解答同页；公式与图形以 PDF 原卷为准。"
-            segs = [[p, 40, 815] for p in pgs]
+            note = "按原卷扫描件转写，公式以 PDF 原卷为准。"
             questions.append({
-                "id": "%s.%d" % (code, n), "paperId": pid, "num": n, "cnNum": CN6[n - 1],
+                "id": "%s.%d" % (code, n), "paperId": pid, "num": n, "cnNum": cn,
                 "heading": head, "points": pts,
                 "type": "填空题" if n == 1 else "解答题",
-                "questionPage": pgs[0], "solutionPage": pgs[0],
+                "questionPage": qp, "solutionPage": sp,
                 "year": 2026, "edition": 18, "stage": "初赛", "group": grp,
                 "stem": stem + "。" + note, "excerpt": stem, "solution": "",
                 "topics": [], "topicHits": {}, "cardIds": [], "confidence": "scan",
-                "qSegs": segs, "sSegs": segs,
-                "thumb": [pgs[0], 40, 192], "thumbS": [pgs[0], 40, 128],
-                "subLabel": "题目与参考答案同页", "scanOnly": True,
+                "qSegs": [[qp, 40, 815]], "sSegs": [[sp, 40, 815]],
+                "thumb": [qp, 40, 192], "thumbS": [qp, 40, 128],
+                "subLabel": "", "scanOnly": True,
             })
 
     for q in questions:

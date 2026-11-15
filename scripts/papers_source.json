@@ -683,9 +683,9 @@
   "group": "A 类",
   "groupRaw": "非数学A 类",
   "questionPage": 319,
-  "questionEnd": 327,
-  "solutionPage": 319,
-  "solutionEnd": 327
+  "questionEnd": 320,
+  "solutionPage": 321,
+  "solutionEnd": 322
  },
  {
   "id": 44,
@@ -698,9 +698,9 @@
   "stage": "初赛",
   "group": "B 类",
   "groupRaw": "非数学B 类",
-  "questionPage": 328,
-  "questionEnd": 335,
-  "solutionPage": 328,
-  "solutionEnd": 335
+  "questionPage": 323,
+  "questionEnd": 324,
+  "solutionPage": 325,
+  "solutionEnd": 326
  }
 ]
