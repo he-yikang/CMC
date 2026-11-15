@@ -71,6 +71,36 @@ def digit_rect(page, line_y, needle):
                     return pymupdf.Rect(chars[i]["bbox"]) | pymupdf.Rect(chars[i + len(needle) - 1]["bbox"])
     return None
 
+# 原书每页页脚印有第三方推广水印。改写流程总是从原始备份重建 PDF，
+# 所以清理必须作为**固定的第一步**内建在这里，否则每次重建都会把水印带回来。
+WATERMARK_KEY = "清疏竞赛考研数学"
+
+
+def strip_watermark(doc):
+    """删掉全部页脚水印文字（幂等）。
+
+    用 redaction 只删文字、保留图片与矢量图形；被连带清掉的链接注解由
+    main() 末尾统一按 orig_links 补回，故不会破坏题目/解答的双向跳转。
+    """
+    hit_pages = hit_rects = 0
+    for page in doc:
+        rects = page.search_for(WATERMARK_KEY)
+        if not rects:
+            continue
+        hit_pages += 1
+        for r in rects:
+            page.add_redact_annot(
+                pymupdf.Rect(r.x0 - .5, r.y0 - .5, r.x1 + .5, r.y1 + .5),
+                fill=(1, 1, 1))
+            hit_rects += 1
+        page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_NONE,
+                              graphics=pymupdf.PDF_REDACT_LINE_ART_NONE,
+                              text=pymupdf.PDF_REDACT_TEXT_REMOVE)
+    if hit_rects:
+        print("清除页脚水印: %d 页 / %d 处" % (hit_pages, hit_rects))
+    return hit_rects
+
+
 MONO = ("2009", "第一届")  # 占位，无实际作用
 
 
@@ -160,6 +190,9 @@ def main():
     # 记录原有链接注解：apply_redactions 会把落在涂改区里的链接一并清掉，
     # 而这些链接正是题目/解答的双向跳转，改完必须原样补回。
     orig_links = {i: [dict(l) for l in pg.get_links()] for i, pg in enumerate(doc)}
+
+    # ---------- 0. 清除原书页脚推广水印（固定步骤，重建后不再出现） ----------
+    strip_watermark(doc)
 
     # ---------- 1. 收集要改写的字段 ----------
     plan = []          # [(page_index, [redact_rects], [(x, y, text, size, color, align)])]

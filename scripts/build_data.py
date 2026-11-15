@@ -662,9 +662,6 @@ def build_syllabus():
 def tag_questions(questions, syllabus):
     kps = syllabus["points"]
     for q in questions:
-        if q.get("scanOnly"):
-            q["topics"] = []; q["topicHits"] = {}; q["confidence"] = "scan"
-            continue
         text = " ".join([q["heading"], q["stem"], q["solution"][:350]])
         scores, hits = {}, {}
         for kp in kps:
@@ -810,9 +807,6 @@ def build_cards(questions, syllabus):
     point_mod = {p["id"]: p["moduleId"] for p in syllabus["points"]}
     for q in questions:
         rel = []
-        if q.get("scanOnly"):
-            q["cardIds"] = []
-            continue
         for c in cards:
             s = card_score[c["id"]].get(q["id"], 0)
             w = (s + (12 if q["id"] in c["manualIds"] else 0)
@@ -843,54 +837,39 @@ def main():
     n_mark = len(collect_marks(doc, 5, 100, MARK_A)) + len(collect_marks(doc, 102, doc.page_count, MARK_B))
     print(f"版面锚点: {n_mark} 个（参考解答 + 返回题目）")
     questions = parse_questions(doc, papers, sol_of, q_of)
-    build_boxes(doc, papers, questions)
-
-    # 第 18 届初赛 A/B 类：内容已按全卷版式重排，不走文本锚点解析；
-    # 按题目版/解答版中的大题标题定位逐题页码，不做考点自动标注。
     # 第 18 届初赛 A/B 类：内容已按全卷版式重排（题目版 / 参考解答版分开），
-    # 逐题页码按各版中「一、」「二、」…标题的实际所在页定位。
+    # 题目与解答文本取自完整转写稿，PDF 中的「参考解答(18A初.1)」「返回题目(…)」
+    # 锚点与其余 42 套完全一致，因此统一交给 build_boxes() 按 y 坐标逐题精确切分，
+    # 并照常走 tag_questions() / build_cards() 的考点与卡片自动标注。
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    from exam18_content import EXAMS as EXAMS18, CN as CN6, question_texts
+
     PAGES18 = json.load(open(os.path.join(ROOT, "scripts", "exam18_pages.json"),
                              encoding="utf-8"))
-    SCAN18_STEM = {
-        "18A初": ["填空题（5 小题，涉及极限、分段函数连续性、对称点、偏导数与数列极限）",
-                  "二元函数 f(x,y) 在 (0,0) 邻域连续，讨论偏导数存在性",
-                  "求解微分方程 x²y''+xy'=y²ln x (x>0)",
-                  "球面面积 S(r) 与两球公共部分体积",
-                  "有界二阶可导函数，证明存在 ξ 使 f''(ξ)=0",
-                  "幂级数求和函数与收敛域"],
-        "18B初": ["填空题（5 小题，涉及极限、分段函数连续性、对称点、二重积分与偏导数）",
-                  "由 lim f(x)∫₀ˣf(t)dt=2 求 lim √x f(x)",
-                  "曲线切线围成图形绕 x 轴旋转体的体积",
-                  "求解微分方程 x²y''+xy'=y²ln x (x>0)",
-                  "幂级数 ∑xⁿ/n 与其平方的收敛域",
-                  "有界二阶可导函数，证明存在 ξ 使 f(ξ)+f''(ξ)=0"],
-    }
-    CN6 = ["一", "二", "三", "四", "五", "六"]
     for code, pid, grp in [("18A初", 43, "A 类"), ("18B初", 44, "B 类")]:
         r = PAGES18["ranges"][code]
-        for n in range(1, 7):
+        for item in EXAMS18[code]["questions"]:
+            n = item["n"]
             cn = CN6[n - 1]
-            qp = next((p for p in range(r["questionPage"], r["questionEnd"] + 1)
-                       if doc[p - 1].search_for(cn + "、")), r["questionPage"])
-            sp = next((p for p in range(r["solutionPage"], r["solutionEnd"] + 1)
-                       if doc[p - 1].search_for(cn + "、")), r["solutionPage"])
-            pts = 30 if n == 1 else 14
-            head = ("一、填空题（本题 30 分，每小题 6 分）" if n == 1
-                    else "%s、（本题满分 14 分）" % cn)
-            stem = SCAN18_STEM[code][n - 1]
-            note = "按原卷扫描件转写，公式以 PDF 原卷为准。"
+            heading = f"{cn}、{item['title']}"
+            stem = question_texts(code, n, "q")
+            sol = question_texts(code, n, "s")
+            qid = f"{code}.{n}"
             questions.append({
-                "id": "%s.%d" % (code, n), "paperId": pid, "num": n, "cnNum": cn,
-                "heading": head, "points": pts,
-                "type": "填空题" if n == 1 else "解答题",
-                "questionPage": qp, "solutionPage": sp,
+                "id": qid, "paperId": pid, "num": n, "cnNum": cn,
+                "heading": heading, "points": points_of(heading),
+                "type": ("填空题" if "填空" in heading else
+                         ("证明题" if "证明" in stem[:400] else "解答题")),
+                "questionPage": r["questionPage"], "solutionPage": r["solutionPage"],
                 "year": 2026, "edition": 18, "stage": "初赛", "group": grp,
-                "stem": stem + "。" + note, "excerpt": stem, "solution": "",
-                "topics": [], "topicHits": {}, "cardIds": [], "confidence": "scan",
-                "qSegs": [[qp, 40, 815]], "sSegs": [[sp, 40, 815]],
-                "thumb": [qp, 40, 192], "thumbS": [qp, 40, 128],
-                "subLabel": "", "scanOnly": True,
+                "stem": stem, "excerpt": excerpt_of(stem), "solution": sol,
             })
+            # 人工核对过的考点清单（与其余卷的 OVERRIDES 机制相同）
+            OVERRIDES[qid] = item["topics"]
+
+    # 全部 284 道题统一按锚点切分 qSegs / sSegs / thumb
+    build_boxes(doc, papers, questions)
 
     for q in questions:
         if q["qSegs"]:
