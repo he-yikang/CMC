@@ -39,6 +39,11 @@ PAPERS = os.path.join(ROOT, "scripts", "papers_source.json")
 
 FONT = pymupdf.Font("china-s")
 INK = (0.20, 0.20, 0.22)
+# 原书目录：标号/组别 0x69707D、标题黑色、页码与「总目录」0x315C7D（蓝）
+INK_CODE = (0.412, 0.451, 0.490)
+INK_TITLE = (0.0, 0.0, 0.0)
+LINK_BLUE = (0.192, 0.357, 0.490)
+GOTO = pymupdf.LINK_GOTO
 
 
 @functools.lru_cache(maxsize=4096)
@@ -113,6 +118,7 @@ def main():
 
     # 记录全部链接（redaction 会清掉落在涂改区内的注解，最后统一重建）
     saved_links = [(i, dict(l)) for i, p in enumerate(doc) for l in p.get_links()]
+    toc_links = []      # 目录新增行的页码导航，等链接整体重建后再插入
     print("记录链接", len(saved_links), "条")
 
     # ---------- 1. 页面上印刷的「第N页」双向跳转提示 ----------
@@ -178,12 +184,16 @@ def main():
     ]
     for j, (code, title, grp, pg_q, pg_s) in enumerate(rows):
         base = 567.0 + 16.9 * j
-        put(p2, 62.0, base, code, 9, INK)
-        put(p2, 112.0, base, title, 9, INK)
-        put(p2, 207.9, base, grp, 9, INK)
-        put(p2, 493.0, base, str(pg_q), 9, INK, "right", "tiro")
-        put(p2, 533.0, base, str(pg_s), 9, INK, "right", "tiro")
-    print("P2 表格新增 2 行：", [(r[0], r[3], r[4]) for r in rows])
+        put(p2, 62.0, base, code, 9, INK_CODE)
+        put(p2, 112.0, base, title, 9, INK_TITLE)
+        put(p2, 207.9, base, grp, 9, INK_CODE)
+        # 与原有 23 行一样：题目页、解答页两个页码都是可点击的导航
+        for right_x, pgno in ((493.0, pg_q), (533.0, pg_s)):
+            txt = str(pgno)
+            w = put(p2, right_x, base, txt, 9, LINK_BLUE, "right")
+            toc_links.append((1, pymupdf.Rect(right_x - w, base - 9, right_x, base + 2),
+                              pgno - 1))
+    print("P2 表格新增 2 行（各 2 个页码导航）：", [(r[0], r[3], r[4]) for r in rows])
 
     # ---------- 3. 插入两段（从后往前，避免索引被前一次插入影响） ----------
     doc.insert_pdf(src, from_page=s["from"], to_page=s["to"], start_at=s_after)
@@ -215,13 +225,12 @@ def main():
     # ---------- 4b. 新卷与其它卷一致的页脚与双向跳转链接 ----------
     # 原书每页页脚有居中页码与可点的「总目录」；每题锚点、卷首提示、
     # 标题右侧「第X页」都能点击互跳。重排版的 13 页也要有，否则「没有定位」。
-    GOTO = pymupdf.LINK_GOTO   # 新页用标准 GoTo；原书链接保留其原有 kind
     new_pages = (list(range(q["new_start"], q["new_start"] + q_count)) +
                  list(range(s["new_start"], s["new_start"] + s_count)))
     for abs_pno in new_pages:
         page = doc[abs_pno - 1]
         pdf_mix.draw(page).text(297.5, 808.0, str(abs_pno), 9, INK, "center")
-        put(page, 533.0, 808.0, "总目录", 8.5, (0.20, 0.28, 0.55), "right")
+        put(page, 533.0, 808.0, "总目录", 8.5, LINK_BLUE, "right")
         for r in page.search_for("总目录"):
             page.insert_link({"kind": GOTO, "from": r, "page": 1})
     added = 0
@@ -231,7 +240,7 @@ def main():
         for word, from_p, to_p in (("参考解答", r["questionPage"], r["solutionPage"]),
                                    ("对应题目", r["solutionPage"], r["questionPage"])):
             page = doc[from_p - 1]
-            cands = [x for x in page.search_for(word) if x.y0 < 300]
+            cands = [x for x in page.search_for(word) if x.y0 < 260]
             if cands:
                 page.insert_link({"kind": GOTO, "from": cands[0], "page": to_p - 1})
                 added += 1
@@ -253,7 +262,9 @@ def main():
                 if rect.y0 > 300:
                     sp.insert_link({"kind": GOTO, "from": rect, "page": a["q"] - 1})
                     added += 1
-    print("新增页脚与双向跳转链接", added, "条")
+    for pi, rect, target in toc_links:
+        doc[pi].insert_link({"kind": GOTO, "from": rect, "page": target})
+    print("新增页脚与双向跳转链接", added, "条；目录新行页码导航", len(toc_links), "条")
 
     # ---------- 5. 回写 papers_source.json 原 42 套页范围 ----------
     # 以固化的「插页前原书页范围」为真值，保证本脚本重复运行结果一致

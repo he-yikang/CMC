@@ -69,10 +69,10 @@ body { font-family: "Times New Roman", "SimSun", "FandolSong", serif;
 .cover { text-align: left; margin-bottom: 7mm; position: relative; }
 .cover h1 { font-family: "SimHei", "FandolHei", sans-serif; font-size: 17.9pt;
             font-weight: 700; margin: 0 0 2mm; letter-spacing: .5px; }
-.cover .sub { font-size: 10.5pt; margin: 0 0 4mm; }
+.cover .sub { font-size: 10.5pt; margin: 0 0 4mm; position: relative; }
 .cover .exam-info { font-size: 9pt; margin: 4mm 0 3mm; }
 .cover .exam-info b { border-bottom: 1px solid #333; padding: 0 6mm; }
-.cover .refhead { position: absolute; right: 0; bottom: 0; font-size: 9pt; color: #333; }
+.cover .refhead { position: absolute; right: 0; top: 0; font-size: 9pt; color: #315C7D; }
 table.score { border-collapse: collapse; width: 100%; font-size: 9pt; margin: 2mm 0 4mm; }
 table.score td, table.score th { border: 1px solid #333; padding: 1.6mm 0; text-align: center; }
 table.score td:first-child { width: 22mm; }
@@ -105,7 +105,8 @@ def sheet_html(code, kind, ref_pages, cover_ref):
         "<div class='body'>",
         "<div class='cover'>",
         "<h1>2026 年第十八届</h1><h1>全国大学生数学竞赛初赛</h1>",
-        f"<div class='sub'>{e['group']}</div>",
+        f"<div class='sub'>{e['group']}"
+        f"<span class='refhead'>{('参考解答' if is_q else '对应题目') + (f' 第{cover_ref}页' if cover_ref else '')}</span></div>",
         "<div class='exam-info'>考试形式：<b>闭卷</b>　考试时间：<b>150</b> 分钟　满分：<b>100</b> 分</div>",
         "<table class='score'><tr><td>题号</td>" + "".join(f"<td>{c}</td>" for c in CN) +
         "<td>总分</td></tr><tr><td>满分</td>" +
@@ -115,7 +116,6 @@ def sheet_html(code, kind, ref_pages, cover_ref):
         "<li>所有答题都须写在本试卷指定的答题区域内。</li>"
         "<li>密封线左边请勿答题，密封线外不得有姓名及相关标记。</li>"
         "<li>如答题空白不够，可写在当页背面，并标明题号。</li></ol></div>",
-        f"<div class='refhead'>{('参考解答' if is_q else '对应题目') + (f' 第{cover_ref}页' if cover_ref else '')}</div>",
         "</div>",
     ]
     for q in e["questions"]:
