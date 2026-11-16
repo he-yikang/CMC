@@ -65,7 +65,9 @@
     "1初.2",
     "2初.1",
     "14初（补2）.1"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}\\lim_{x\\to0}\\frac{\\sin x}{x}=1\\\\[5pt]\\lim_{x\\to\\infty}\\left(1+\\frac1x\\right)^{x}=e\\\\[5pt]\\lim_{x\\to0}(1+x)^{1/x}=e\\\\[5pt]\\lim_{n\\to\\infty}\\left(1+\\frac an\\right)^{n}=e^{a}\\end{aligned}",
+   "latexFull": "\\begin{aligned}\\lim_{x\\to0}\\frac{\\sin x}{x}&=1,\\quad \\lim_{x\\to\\infty}\\left(1+\\frac1x\\right)^{x}&=e\\\\[6pt]\\lim_{x\\to0}(1+x)^{1/x}&=e,\\quad \\lim_{n\\to\\infty}\\left(1+\\frac an\\right)^{n}&=e^{a}\\end{aligned}"
   },
   {
    "id": "K-M1-F02",
@@ -607,7 +609,9 @@
    ],
    "must": [
     "17B决.7"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}f(x)=T_n(x)+R_n(x)\\\\[5pt]T_n(x)=\\sum_{k=0}^{n}\\frac{f^{(k)}(x_0)}{k!}(x-x_0)^{k}\\\\[5pt]R_n^{L}=\\frac{f^{(n+1)}(\\xi)}{(n+1)!}(x-x_0)^{n+1}\\\\[5pt]R_n^{P}=o\\!\\left((x-x_0)^{n}\\right)\\end{aligned}",
+   "latexFull": "\\begin{aligned}f(x)&=T_n(x)+R_n(x),\\quad T_n(x)&=\\sum_{k=0}^{n}\\frac{f^{(k)}(x_0)}{k!}(x-x_0)^{k}\\\\[6pt]R_n^{L}&=\\frac{f^{(n+1)}(\\xi)}{(n+1)!}(x-x_0)^{n+1},\\quad R_n^{P}&=o\\!\\left((x-x_0)^{n}\\right)\\end{aligned}"
   },
   {
    "id": "K-M2-T05",
@@ -784,7 +788,9 @@
      4
     ]
    ],
-   "must": []
+   "must": [],
+   "latexFullMobile": "\\begin{aligned}K=\\frac{|y''|}{\\left(1+y'^{2}\\right)^{3/2}}\\\\[5pt]R=\\frac1K\\\\[5pt]K=\\frac{|x'y''-y'x''|}{\\left(x'^{2}+y'^{2}\\right)^{3/2}}\\\\[5pt]\\mathrm{d}s=\\sqrt{1+y'^{2}}\\,\\mathrm{d}x\\end{aligned}",
+   "latexFull": "\\begin{aligned}K&=\\frac{|y''|}{\\left(1+y'^{2}\\right)^{3/2}},\\quad R&=\\frac1K\\\\[6pt]K&=\\frac{|x'y''-y'x''|}{\\left(x'^{2}+y'^{2}\\right)^{3/2}},\\quad \\mathrm{d}s&=\\sqrt{1+y'^{2}}\\,\\mathrm{d}x\\end{aligned}"
   },
   {
    "id": "K-M2-F04",
@@ -812,7 +818,9 @@
      4
     ]
    ],
-   "must": []
+   "must": [],
+   "latexFullMobile": "\\begin{aligned}a=\\lim_{x\\to\\infty}\\frac{f(x)}{x}\\\\[5pt]b=\\lim_{x\\to\\infty}\\bigl(f(x)-ax\\bigr)\\\\[5pt]y=ax+b\\\\[5pt]f(x)\\to c\\quad(x\\to\\pm\\infty)\\end{aligned}",
+   "latexFull": "\\begin{aligned}a&=\\lim_{x\\to\\infty}\\frac{f(x)}{x},\\quad b&=\\lim_{x\\to\\infty}\\bigl(f(x)-ax\\bigr)\\\\[6pt]y&=ax+b,\\quad f(x)\\to c\\quad(x\\to\\pm\\infty)&\\end{aligned}"
   },
   {
    "id": "K-M2-P01",
@@ -1044,7 +1052,9 @@
    "must": [
     "1初.3",
     "14初（补2）.2"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}\\frac{\\mathrm{d}}{\\mathrm{d}x}\\int_{a}^{x}f(t)\\,\\mathrm{d}t=f(x)\\\\[5pt]\\frac{\\mathrm{d}}{\\mathrm{d}x}\\int_{\\alpha(x)}^{\\beta(x)}f(t)\\,\\mathrm{d}t=f(\\beta)\\beta'-f(\\alpha)\\alpha'\\\\[5pt]\\int_{0}^{1}f(xt)\\,\\mathrm{d}t=\\frac1x\\int_{0}^{x}f(u)\\,\\mathrm{d}u\\end{aligned}",
+   "latexFull": "\\begin{aligned}\\frac{\\mathrm{d}}{\\mathrm{d}x}\\int_{a}^{x}f(t)\\,\\mathrm{d}t=f(x)\\\\[5pt]\\frac{\\mathrm{d}}{\\mathrm{d}x}\\int_{\\alpha(x)}^{\\beta(x)}f(t)\\,\\mathrm{d}t=f(\\beta)\\beta'-f(\\alpha)\\alpha'\\\\[5pt]\\int_{0}^{1}f(xt)\\,\\mathrm{d}t=\\frac1x\\int_{0}^{x}f(u)\\,\\mathrm{d}u\\end{aligned}"
   },
   {
    "id": "K-M3-F03",
@@ -1072,7 +1082,9 @@
      1
     ]
    ],
-   "must": []
+   "must": [],
+   "latexFullMobile": "\\begin{aligned}\\int u\\,\\mathrm{d}v=uv-\\int v\\,\\mathrm{d}u\\\\[5pt]\\int_{a}^{b}u\\,\\mathrm{d}v=[uv]_{a}^{b}-\\int_{a}^{b}v\\,\\mathrm{d}u\\\\[5pt]I_n=\\frac{n-1}{n}I_{n-2}\\quad\\text{（递推型）}\\end{aligned}",
+   "latexFull": "\\begin{aligned}\\int u\\,\\mathrm{d}v=uv-\\int v\\,\\mathrm{d}u\\\\[5pt]\\int_{a}^{b}u\\,\\mathrm{d}v=[uv]_{a}^{b}-\\int_{a}^{b}v\\,\\mathrm{d}u\\\\[5pt]I_n=\\frac{n-1}{n}I_{n-2}\\quad\\text{（递推型）}\\end{aligned}"
   },
   {
    "id": "K-M3-F04",
@@ -1102,7 +1114,9 @@
    ],
    "must": [
     "6初.2"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}\\int_{a}^{b}f(\\varphi(t))\\varphi'(t)\\,\\mathrm{d}t=\\int_{\\varphi(a)}^{\\varphi(b)}f(x)\\,\\mathrm{d}x\\\\[5pt]x=a\\sin t,\\quad x=a\\tan t,\\quad x=a\\sec t\\\\[5pt]\\mathrm{d}x=\\varphi'(t)\\,\\mathrm{d}t\\end{aligned}",
+   "latexFull": "\\begin{aligned}\\int_{a}^{b}f(\\varphi(t))\\varphi'(t)\\,\\mathrm{d}t=\\int_{\\varphi(a)}^{\\varphi(b)}f(x)\\,\\mathrm{d}x\\\\[5pt]x=a\\sin t,\\quad x=a\\tan t,\\quad x=a\\sec t\\\\[5pt]\\mathrm{d}x=\\varphi'(t)\\,\\mathrm{d}t\\end{aligned}"
   },
   {
    "id": "K-M3-F05",
@@ -1144,7 +1158,9 @@
    ],
    "must": [
     "1初.6"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}S=\\int_{a}^{b}|f-g|\\,\\mathrm{d}x\\\\[5pt]V_x=\\pi\\int_{a}^{b}f^{2}\\,\\mathrm{d}x\\\\[5pt]s=\\int_{a}^{b}\\sqrt{1+y'^{2}}\\,\\mathrm{d}x\\\\[5pt]S_{\\text{侧}}=2\\pi\\int_{a}^{b}|y|\\sqrt{1+y'^{2}}\\,\\mathrm{d}x\\\\[5pt]V=2\\pi\\int x f(x)\\,\\mathrm{d}x\\quad\\text{（壳法）}\\end{aligned}",
+   "latexFull": "\\begin{aligned}S&=\\int_{a}^{b}|f-g|\\,\\mathrm{d}x,\\quad V_x&=\\pi\\int_{a}^{b}f^{2}\\,\\mathrm{d}x\\\\[6pt]s&=\\int_{a}^{b}\\sqrt{1+y'^{2}}\\,\\mathrm{d}x,\\quad S_{\\text{侧}}&=2\\pi\\int_{a}^{b}|y|\\sqrt{1+y'^{2}}\\,\\mathrm{d}x\\\\[6pt]V&=2\\pi\\int x f(x)\\,\\mathrm{d}x\\quad\\text{（壳法）}\\end{aligned}"
   },
   {
    "id": "K-M3-T01",
@@ -1178,7 +1194,9 @@
    ],
    "must": [
     "14初.4"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}\\int_{a}^{b}f(x)\\,\\mathrm{d}x=f(\\xi)(b-a),\\quad\\xi\\in[a,b]\\\\[5pt]\\int_{a}^{b}fg=f(\\xi)\\int_{a}^{b}g\\quad(g\\ \\text{不变号})\\end{aligned}",
+   "latexFull": "\\begin{aligned}\\int_{a}^{b}f(x)\\,\\mathrm{d}x&=f(\\xi)(b-a),\\quad\\xi\\in[a,b],\\quad \\int_{a}^{b}fg&=f(\\xi)\\int_{a}^{b}g\\quad(g\\ \\text{不变号})\\end{aligned}"
   },
   {
    "id": "K-M3-P01",
@@ -1506,7 +1524,9 @@
    ],
    "must": [
     "17B决.3"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}\\frac{\\partial z}{\\partial x}=-\\frac{F_x}{F_z}\\\\[5pt]\\frac{\\partial z}{\\partial y}=-\\frac{F_y}{F_z}\\\\[5pt]\\frac{\\mathrm{d}y}{\\mathrm{d}x}=-\\frac{F_x}{F_y}\\\\[5pt]F_z\\neq0\\end{aligned}",
+   "latexFull": "\\begin{aligned}\\frac{\\partial z}{\\partial x}&=-\\frac{F_x}{F_z},\\quad \\frac{\\partial z}{\\partial y}&=-\\frac{F_y}{F_z}\\\\[6pt]\\frac{\\mathrm{d}y}{\\mathrm{d}x}&=-\\frac{F_x}{F_y},\\quad F_z\\neq0&\\end{aligned}"
   },
   {
    "id": "K-M4-F04",
@@ -1576,7 +1596,9 @@
    ],
    "must": [
     "1初.1"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}F_x(x-x_0)+F_y(y-y_0)+F_z(z-z_0)=0\\\\[5pt]z-z_0=f_x(x-x_0)+f_y(y-y_0)\\\\[5pt]\\vec n=\\nabla F=(F_x,F_y,F_z)\\\\[5pt]\\vec T=\\vec r\\,'(t)\\end{aligned}",
+   "latexFull": "\\begin{aligned}F_x(x-x_0)+F_y(y-y_0)+F_z(z-z_0)&=0,\\quad z-z_0&=f_x(x-x_0)+f_y(y-y_0)\\\\[6pt]\\vec n&=\\nabla F=(F_x,F_y,F_z),\\quad \\vec T&=\\vec r\\,'(t)\\end{aligned}"
   },
   {
    "id": "K-M4-T01",
@@ -1612,7 +1634,9 @@
      3
     ]
    ],
-   "must": []
+   "must": [],
+   "latexFullMobile": "\\begin{aligned}A=f_{xx},\\quad B=f_{xy},\\quad C=f_{yy}\\\\[5pt]AC-B^{2}>0,\\ A<0\\Rightarrow\\max\\\\[5pt]AC-B^{2}>0,\\ A>0\\Rightarrow\\min\\\\[5pt]AC-B^{2}<0\\Rightarrow\\text{鞍点}\\end{aligned}",
+   "latexFull": "\\begin{aligned}A&=f_{xx},\\quad B=f_{xy},\\quad C=f_{yy},\\quad AC-B^{2}>0,\\ A<0\\Rightarrow\\max&\\\\[6pt]AC-B^{2}>0,\\ A>0\\Rightarrow\\min&,\\quad AC-B^{2}<0\\Rightarrow\\text{鞍点}&\\end{aligned}"
   },
   {
    "id": "K-M4-T02",
@@ -1785,7 +1809,9 @@
    "must": [
     "1初.1",
     "1初.4"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}\\iint_D f\\,\\mathrm{d}\\sigma=\\int_{a}^{b}\\!\\int_{y_1(x)}^{y_2(x)}f\\,\\mathrm{d}y\\,\\mathrm{d}x\\\\[5pt]\\iint_D f\\,\\mathrm{d}\\sigma=\\iint f(r,\\theta)\\,r\\,\\mathrm{d}r\\,\\mathrm{d}\\theta\\\\[5pt]x=r\\cos\\theta,\\quad y=r\\sin\\theta\\end{aligned}",
+   "latexFull": "\\begin{aligned}\\iint_D f\\,\\mathrm{d}\\sigma=\\int_{a}^{b}\\!\\int_{y_1(x)}^{y_2(x)}f\\,\\mathrm{d}y\\,\\mathrm{d}x\\\\[5pt]\\iint_D f\\,\\mathrm{d}\\sigma=\\iint f(r,\\theta)\\,r\\,\\mathrm{d}r\\,\\mathrm{d}\\theta\\\\[5pt]x=r\\cos\\theta,\\quad y=r\\sin\\theta\\end{aligned}"
   },
   {
    "id": "K-M5-F02",
@@ -1885,7 +1911,9 @@
    ],
    "must": [
     "1初.4"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}\\int_L f\\,\\mathrm{d}s=\\int_{\\alpha}^{\\beta}f(x(t),y(t))\\sqrt{x'^{2}+y'^{2}}\\,\\mathrm{d}t\\\\[5pt]\\int_L P\\,\\mathrm{d}x+Q\\,\\mathrm{d}y\\\\[5pt]\\int_L P\\,\\mathrm{d}x+Q\\,\\mathrm{d}y=\\int_L(P\\cos\\alpha+Q\\cos\\beta)\\,\\mathrm{d}s\\end{aligned}",
+   "latexFull": "\\begin{aligned}\\int_L f\\,\\mathrm{d}s=\\int_{\\alpha}^{\\beta}f(x(t),y(t))\\sqrt{x'^{2}+y'^{2}}\\,\\mathrm{d}t\\\\[5pt]\\int_L P\\,\\mathrm{d}x+Q\\,\\mathrm{d}y\\\\[5pt]\\int_L P\\,\\mathrm{d}x+Q\\,\\mathrm{d}y=\\int_L(P\\cos\\alpha+Q\\cos\\beta)\\,\\mathrm{d}s\\end{aligned}"
   },
   {
    "id": "K-M5-T01",
@@ -1991,7 +2019,9 @@
      3
     ]
    ],
-   "must": []
+   "must": [],
+   "latexFullMobile": "\\begin{aligned}\\iint_\\Sigma f\\,\\mathrm{d}S=\\iint_{D_{xy}}f\\sqrt{1+z_x^{2}+z_y^{2}}\\,\\mathrm{d}x\\,\\mathrm{d}y\\\\[5pt]\\iint_\\Sigma P\\,\\mathrm{d}y\\mathrm{d}z+Q\\,\\mathrm{d}z\\mathrm{d}x+R\\,\\mathrm{d}x\\mathrm{d}y\\\\[5pt]=\\iint_\\Sigma(P\\cos\\alpha+Q\\cos\\beta+R\\cos\\gamma)\\,\\mathrm{d}S\\end{aligned}",
+   "latexFull": "\\begin{aligned}\\iint_\\Sigma f\\,\\mathrm{d}S=\\iint_{D_{xy}}f\\sqrt{1+z_x^{2}+z_y^{2}}\\,\\mathrm{d}x\\,\\mathrm{d}y\\\\[5pt]\\iint_\\Sigma P\\,\\mathrm{d}y\\mathrm{d}z+Q\\,\\mathrm{d}z\\mathrm{d}x+R\\,\\mathrm{d}x\\mathrm{d}y\\\\[5pt]=\\iint_\\Sigma(P\\cos\\alpha+Q\\cos\\beta+R\\cos\\gamma)\\,\\mathrm{d}S\\end{aligned}"
   },
   {
    "id": "K-M5-T02",
@@ -2262,7 +2292,9 @@
    ],
    "must": [
     "1初.7"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}y'+P(x)y=Q(x)\\\\[5pt]y=e^{-\\int P\\,\\mathrm{d}x}\\left(\\int Qe^{\\int P\\,\\mathrm{d}x}\\,\\mathrm{d}x+C\\right)\\\\[5pt]\\mu(x)=e^{\\int P\\,\\mathrm{d}x},\\quad (\\mu y)'=\\mu Q\\end{aligned}",
+   "latexFull": "\\begin{aligned}y'+P(x)y=Q(x)\\\\[5pt]y=e^{-\\int P\\,\\mathrm{d}x}\\left(\\int Qe^{\\int P\\,\\mathrm{d}x}\\,\\mathrm{d}x+C\\right)\\\\[5pt]\\mu(x)=e^{\\int P\\,\\mathrm{d}x},\\quad (\\mu y)'=\\mu Q\\end{aligned}"
   },
   {
    "id": "K-M6-F03",
@@ -2370,7 +2402,9 @@
    ],
    "must": [
     "1初.5"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}y''+py'+qy=0,\\quad r^{2}+pr+q=0\\\\[5pt]r_1\\ne r_2:\\ y=C_1e^{r_1x}+C_2e^{r_2x}\\\\[5pt]r_1=r_2:\\ y=(C_1+C_2x)e^{rx}\\\\[5pt]r=\\alpha\\pm i\\beta:/ y=e^{\\alpha x}(C_1\\cos\\beta x+C_2\\sin\\beta x)\\end{aligned}",
+   "latexFull": "\\begin{aligned}y''+py'+qy=0,\\quad r^{2}+pr+q=0\\\\[5pt]r_1\\ne r_2:\\ y=C_1e^{r_1x}+C_2e^{r_2x}\\\\[5pt]r_1=r_2:\\ y=(C_1+C_2x)e^{rx}\\\\[5pt]r=\\alpha\\pm i\\beta:/ y=e^{\\alpha x}(C_1\\cos\\beta x+C_2\\sin\\beta x)\\end{aligned}"
   },
   {
    "id": "K-M6-M01",
@@ -3084,7 +3118,9 @@
    "must": [
     "14初（补2）.2",
     "17B决.5"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}\\frac1{1-x}=\\sum_{n=0}^{\\infty}x^{n}\\\\[5pt]e^{x}=\\sum\\frac{x^{n}}{n!}\\\\[5pt]\\ln(1+x)=\\sum\\frac{(-1)^{n-1}x^{n}}{n}\\\\[5pt]\\sin x=\\sum\\frac{(-1)^{n}x^{2n+1}}{(2n+1)!}\\end{aligned}",
+   "latexFull": "\\begin{aligned}\\frac1{1-x}&=\\sum_{n=0}^{\\infty}x^{n},\\quad e^{x}&=\\sum\\frac{x^{n}}{n!}\\\\[6pt]\\ln(1+x)&=\\sum\\frac{(-1)^{n-1}x^{n}}{n},\\quad \\sin x&=\\sum\\frac{(-1)^{n}x^{2n+1}}{(2n+1)!}\\end{aligned}"
   },
   {
    "id": "K-M8-M01",
@@ -3159,7 +3195,9 @@
      3
     ]
    ],
-   "must": []
+   "must": [],
+   "latexFullMobile": "\\begin{aligned}a_n=\\frac1l\\int_{-l}^{l}f(x)\\cos\\frac{n\\pi x}{l}\\,\\mathrm{d}x\\\\[5pt]b_n=\\frac1l\\int_{-l}^{l}f(x)\\sin\\frac{n\\pi x}{l}\\,\\mathrm{d}x\\\\[5pt]f(x)\\sim\\frac{a_0}{2}+\\sum_{n\\geq1}\\left(a_n\\cos\\frac{n\\pi x}{l}+b_n\\sin\\frac{n\\pi x}{l}\\right)\\end{aligned}",
+   "latexFull": "\\begin{aligned}a_n=\\frac1l\\int_{-l}^{l}f(x)\\cos\\frac{n\\pi x}{l}\\,\\mathrm{d}x\\\\[5pt]b_n=\\frac1l\\int_{-l}^{l}f(x)\\sin\\frac{n\\pi x}{l}\\,\\mathrm{d}x\\\\[5pt]f(x)\\sim\\frac{a_0}{2}+\\sum_{n\\geq1}\\left(a_n\\cos\\frac{n\\pi x}{l}+b_n\\sin\\frac{n\\pi x}{l}\\right)\\end{aligned}"
   },
   {
    "id": "K-M8-T03",
@@ -3302,7 +3340,9 @@
    "must": [
     "6决.3",
     "16A决.5"
-   ]
+   ],
+   "latexFullMobile": "\\begin{aligned}B=P^{-1}AP\\\\[5pt]A\\ \\text{正定}\\iff\\forall x\\ne0,\\ x^{T}Ax>0\\\\[5pt]P^{T}AP=I\\end{aligned}",
+   "latexFull": "\\begin{aligned}B&=P^{-1}AP,\\quad A\\ \\text{正定}\\iff\\forall x\\ne0,\\ x^{T}Ax>0&\\\\[6pt]P^{T}AP&=I\\end{aligned}"
   },
   {
    "id": "K-L2-P02",
