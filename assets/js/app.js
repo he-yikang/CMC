@@ -1100,11 +1100,20 @@
           </a>`).join('')}</div>
       </div>
 
-      <div class="section-title">竞赛时间轴 <span class="n">点击年份查看该年试卷</span></div>
-      <div class="card tight"><div class="timeline">${years.map(y => `
-        <div class="tl-item" data-goto="#/papers?year=${y}" style="--dc:${byYear[y] > 1 ? '#26c6da' : '#8b7bff'}">
-          <div class="ty">${y}</div><div class="td"></div><div class="tc">${byYear[y]} 套</div>
-        </div>`).join('')}</div></div>
+      <div class="section-title">竞赛时间轴 <span class="n">拖动滑块或点击年份，联动查看当年试卷与考点</span></div>
+      <div class="card tight tlx">
+        <div class="tlx-bar">
+          <input type="range" class="tlx-range" id="tlRange" min="0" max="${years.length - 1}" step="1"
+                 value="${years.length - 1}" aria-label="拖动选择年份">
+          <a class="btn sm ghost" id="tlAll" href="#/papers?year=${years[years.length - 1]}">查看该年全部 →</a>
+        </div>
+        <div class="timeline" id="tlTrack">${years.map(y => `
+          <button type="button" class="tl-item" data-y="${y}" aria-pressed="false"
+                  style="--dc:${byYear[y] > 1 ? '#26c6da' : '#8b7bff'}">
+            <div class="ty">${y}</div><div class="td"></div><div class="tc">${byYear[y]} 套</div>
+          </button>`).join('')}</div>
+        <div class="tlx-panel" id="tlPanel"></div>
+      </div>
 
       <div class="grid2" style="margin-top:20px">
         <div class="card">
@@ -1144,6 +1153,77 @@
       sync();
       fxBtn.addEventListener('click', () => { HeroFX.toggle(); sync(); });
     }
+
+    /* 时间轴探索：滑块 / 点击年份 → 当年试卷 + 考点分布，均不离开首页 */
+    const tlRange = $('#tlRange'), tlTrack = $('#tlTrack'), tlPanel = $('#tlPanel'), tlAll = $('#tlAll');
+    const papersByYear = {}, topicsByYear = {};
+    papers.forEach(p => { (papersByYear[p.year] = papersByYear[p.year] || []).push(p); });
+    questions.forEach(q => {
+      const m = topicsByYear[q.year] || (topicsByYear[q.year] = {});
+      (q.topics || []).forEach(t => { m[t] = (m[t] || 0) + 1; });
+    });
+    const renderYear = (y, scrollNode) => {
+      const ps = papersByYear[y] || [];
+      const qs = questions.filter(q => q.year === y);
+      const tops = Object.entries(topicsByYear[y] || {})
+        .map(([id, v]) => ({ id, v, label: `${(PT[id] || {}).short || id}（${id}）`,
+                             color: (PT[id] || {}).color || '#8b7bff' }))
+        .sort((a, b) => b.v - a.v).slice(0, 6);
+      const lw = window.matchMedia && window.matchMedia('(max-width:620px)').matches ? 104 : 132;
+      tlPanel.innerHTML = `
+        <div class="tlx-sum"><b class="mono">${y}</b>
+          <span>${ps.length} 套试卷</span><i>·</i><span>${qs.length} 道大题</span><i>·</i><span>${tops.length} 个高频考点</span></div>
+        <div class="tlx-cols">
+          <div>
+            <div class="tlx-ct">当年试卷</div>
+            <div class="tlx-papers">${ps.length ? ps.map(p => `
+              <a class="tlx-paper" href="#/paper/${pad2(p.id)}">
+                <span class="mono">${p.code}</span>
+                <b>${esc(p.short)}</b>
+                <span>${esc(p.group)}</span>
+                <small>${p.questionCount} 题 · 题目 P${p.questionPage}</small>
+              </a>`).join('') : '<div class="small muted">该年暂无收录试卷</div>'}</div>
+          </div>
+          <div>
+            <div class="tlx-ct">考点分布 <span class="muted">按当年题次统计</span></div>
+            ${tops.length ? hbars(tops.map(t => ({ label: t.label, value: t.v, color: t.color,
+              href: `#/topic/${t.id}` })), { click: true, labelWidth: lw })
+              : '<div class="small muted">该年暂无考点标注</div>'}
+          </div>
+        </div>`;
+      $$('#tlTrack .tl-item').forEach(b => {
+        const on = Number(b.dataset.y) === y;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', String(on));
+      });
+      tlAll.href = `#/papers?year=${y}`;
+      if (scrollNode) {
+        const node = $(`#tlTrack .tl-item[data-y="${y}"]`);
+        if (node) {
+          const tr = tlTrack.getBoundingClientRect(), nr = node.getBoundingClientRect();
+          if (nr.left < tr.left + 16 || nr.right > tr.right - 16) {
+            tlTrack.scrollTo({
+              left: node.offsetLeft - tlTrack.clientWidth / 2 + node.clientWidth / 2,
+              behavior: 'smooth'
+            });
+          }
+        }
+      }
+    };
+    const setYear = (y, scroll) => {
+      const i = years.indexOf(Number(y));
+      if (i < 0) return;
+      tlRange.value = i;
+      renderYear(Number(y), scroll);
+    };
+    tlRange.addEventListener('input', () => setYear(years[Number(tlRange.value)], true));
+    tlTrack.addEventListener('click', e => {
+      const b = e.target.closest('.tl-item');
+      if (b) setYear(Number(b.dataset.y), false);
+    });
+    const hq = new URLSearchParams(location.hash.split('?')[1] || location.search.slice(1));
+    const wantYear = Number(hq.get('year'));
+    setYear(years.includes(wantYear) ? wantYear : years[years.length - 1], true);
   }
 
   /* ----------------------------- 视图：试卷库 ----------------------------- */
