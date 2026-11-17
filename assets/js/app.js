@@ -99,53 +99,6 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2400);
   }
 
-  /* ----------------------------- 学习档案（完全本地） ----------------------------- */
-  const ARC_KEY = 'cmc.archive.v1';
-  let ARC = {};
-  try { ARC = JSON.parse(localStorage.getItem(ARC_KEY) || '{}') || {}; } catch (e) { ARC = {}; }
-  const arcSave = () => { try { localStorage.setItem(ARC_KEY, JSON.stringify(ARC)); } catch (e) {} };
-  const arcGet = id => ARC[id] || (ARC[id] = { review: 0, mastered: 0, fav: 0, note: '', ts: 0 });
-  function arcSync() {
-    $$('[data-arc-btn]').forEach(b => {
-      const m = ARC[b.dataset.q];
-      b.classList.toggle('on', !!(m && m[b.dataset.arcBtn]));
-    });
-    const n = Object.values(ARC).filter(m => m && (m.review || m.mastered || m.fav || m.note)).length;
-    $$('#arcCount').forEach(x => { x.textContent = n; });
-  }
-  function arcToggle(id, flag) {
-    const m = arcGet(id);
-    m[flag] = m[flag] ? 0 : 1; m.ts = Date.now(); arcSave(); arcSync();
-    toast(({ review: '已加入想再看', mastered: '已标记掌握', fav: '已收藏' })[flag] || '已更新');
-  }
-  function arcSetNote(id, text) {
-    const m = arcGet(id);
-    m.note = String(text || '').slice(0, 4000); m.ts = Date.now(); arcSave(); arcSync();
-  }
-  const arcBtns = qid => {
-    const m = ARC[qid] || {};
-    return `<span class="arc-btns">
-      <button type="button" class="arc-btn ${m.review ? 'on' : ''}" data-arc-btn="review" data-q="${qid}" title="想再看">再看</button>
-      <button type="button" class="arc-btn ${m.mastered ? 'on' : ''}" data-arc-btn="mastered" data-q="${qid}" title="已掌握">掌握</button>
-      <button type="button" class="arc-btn ${m.fav ? 'on' : ''}" data-arc-btn="fav" data-q="${qid}" title="收藏">收藏</button>
-      <button type="button" class="arc-btn ${m.note ? 'on' : ''}" data-arc-btn="note" data-q="${qid}" title="笔记">笔记</button>
-    </span>`;
-  };
-  let arcNoteId = null;
-  function arcNoteInfo() {
-    $('#arcNoteInfo').textContent = `${($('#arcNoteText').value || '').length} / 4000 字`;
-  }
-  function arcOpenNote(id) {
-    arcNoteId = id;
-    const q = Q[id] || {};
-    $('#arcNoteTitle').textContent = `${id} · ${q.type || ''} · ${q.year || ''}`;
-    $('#arcNoteText').value = (ARC[id] || {}).note || '';
-    arcNoteInfo();
-    $('#arcNote').hidden = false;
-    setTimeout(() => $('#arcNoteText').focus(), 30);
-  }
-  function arcCloseNote() { $('#arcNote').hidden = true; arcNoteId = null; }
-
   /* ----------------------------- PDF 引擎 ----------------------------- */
   let pdfPromise = null;
   function loadPdf() {
@@ -340,7 +293,6 @@
       <div class="sq-foot">
         <a class="btn sm" href="assets/cmc-papers.pdf#page=${page}" target="_blank" rel="noopener">PDF 原件 P${page} ↗</a>
         ${q.topics && q.topics.length ? `<a class="btn sm ghost" href="#/topic/${q.topics[0]}">关联考点 →</a>` : ''}
-        ${arcBtns(q.id)}
       </div>`;
 
     const tabOwner = tabsHost || host;
@@ -1364,7 +1316,6 @@
                 <button class="btn sm" data-open="${q.id}" data-mode="question">看题目</button>
                 <button class="btn sm" data-open="${q.id}" data-mode="solution">看解答</button>
                 <button class="btn sm ghost" data-drawer="${q.id}">抽屉打开 ↗</button>
-                ${arcBtns(q.id)}
               </div>
             </div>`).join('')}</div>
         </div>
@@ -1429,7 +1380,6 @@
       }, $('#inlineTabs'));
     };
     $('#qList').addEventListener('click', e => {
-      if (e.target.closest('[data-arc-btn]')) return;   // 标记档案不切换当前阅读题目
       const item = e.target.closest('.q-item'); if (!item) return;
       const b = e.target.closest('[data-open],[data-drawer]');
       if (b) {
@@ -2055,82 +2005,6 @@
     observeThumbs($('#cardTable'));
   }
 
-  /* ----------------------------- 视图：学习档案 ----------------------------- */
-  function viewArchive() {
-    setNav('archive'); crumb([{ t: '学习档案' }]);
-    const groups = [['review', '想再看'], ['mastered', '已掌握'], ['fav', '收藏'], ['note', '有笔记']];
-    const entries = Object.entries(ARC).filter(([id, m]) => m && (m.review || m.mastered || m.fav || m.note));
-    const counts = k => entries.filter(([id, m]) => m[k]).length;
-    let cur = 'all';
-    const render = () => {
-      const list = cur === 'all' ? entries : entries.filter(([id, m]) => m[cur]);
-      $('#arcStats').innerHTML = groups.map(([k, n]) =>
-        `<div class="arc-stat"><span>${n}</span><b class="mono">${counts(k)}</b></div>`).join('');
-      $('#arcTotal').textContent = `${list.length} 条记录 · 全部 ${entries.length} 条`;
-      $('#arcList').innerHTML = list.length ? list.map(([id, m]) => {
-        const q = Q[id] || {};
-        const flags = groups.filter(([k]) => m[k]).map(([k, n]) => `<span class="chip">${n}</span>`).join('');
-        return `<div class="arc-row">
-          <div class="arc-row-main">
-            <a class="mono" href="#/paper/${pad2(q.paperId || 1)}?q=${encodeURIComponent(id)}">${id}</a>
-            <b>${esc(q.stem || q.heading || '').slice(0, 70)}</b>
-            <div class="chips">${flags}<span class="chip">${esc(q.type || '')}</span>${q.points ? `<span class="chip">${q.points} 分</span>` : ''}</div>
-            ${m.note ? `<div class="arc-note-ex">${esc(m.note.slice(0, 180))}${m.note.length > 180 ? '…' : ''}</div>` : ''}
-          </div>
-          <div class="arc-row-act">${arcBtns(id)}</div>
-        </div>`;
-      }).join('') : '<div class="empty"><span class="big">☆</span>这里还没有记录。在题目卡片或单题阅读里点「再看 / 掌握 / 收藏 / 笔记」即可。</div>';
-      $$('#arcTabs button').forEach(b => b.classList.toggle('on', b.dataset.v === cur));
-    };
-    $view.innerHTML = `
-      <div class="page-head">
-        <div class="eyebrow">Your workspace · 浏览器本地保存</div>
-        <h1>学习档案</h1>
-        <p>把要回看的题、已掌握的题、收藏与笔记集中在这里。内容只保存在当前浏览器，不上传。</p>
-        <div class="chips" style="margin-top:10px">
-          <button class="btn sm" id="arcExport">导出 JSON</button>
-          <button class="btn sm ghost" id="arcImportBtn">导入 JSON</button>
-          <button class="btn sm ghost" id="arcClear">清空档案</button>
-        </div>
-      </div>
-      <div class="arc-stats" id="arcStats"></div>
-      <div class="card tight">
-        <div class="card-head"><h2>记录</h2><span class="hint" id="arcTotal"></span></div>
-        <div class="filter-group" id="arcTabs">${[['all', '全部']].concat(groups)
-          .map(([k, n]) => `<button data-v="${k}" class="${k === 'all' ? 'on' : ''}">${n}</button>`).join('')}</div>
-        <div id="arcList"></div>
-      </div>`;
-    $('#arcTabs').addEventListener('click', e => {
-      const b = e.target.closest('button'); if (!b) return;
-      cur = b.dataset.v; render();
-    });
-    $('#arcExport').addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify(ARC, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = 'cmc-archive.json'; a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-      toast('已导出 JSON');
-    });
-    $('#arcImportBtn').addEventListener('click', () => $('#arcImport').click());
-    $('#arcImport').addEventListener('change', e => {
-      const f = e.target.files && e.target.files[0]; if (!f) return;
-      const r = new FileReader();
-      r.onload = () => {
-        try {
-          const obj = JSON.parse(r.result);
-          Object.keys(obj || {}).forEach(id => { if (Q[id]) ARC[id] = Object.assign({}, ARC[id], obj[id]); });
-          arcSave(); toast('已导入'); route();
-        } catch (err) { toast('文件格式不对'); }
-      };
-      r.readAsText(f); e.target.value = '';
-    });
-    $('#arcClear').addEventListener('click', () => {
-      if (!confirm('确定清空学习档案？此操作不可撤销。')) return;
-      ARC = {}; arcSave(); toast('已清空'); route();
-    });
-    render();
-  }
-
   /* ----------------------------- 视图：考纲全文 ----------------------------- */
   let sylClosed = {};
   function viewSyllabus() {
@@ -2313,29 +2187,12 @@
     else if (parts[0] === 'topic') viewTopic(parts[1]);
     else if (parts[0] === 'card') viewCard(parts[1]);
     else if (parts[0] === 'stats') viewStats();
-    else if (parts[0] === 'archive') viewArchive();
     else if (parts[0] === 'syllabus') viewSyllabus();
     else if (parts[0] === 'search') viewSearch(params);
     else viewHome();
   }
 
   /* ----------------------------- 全局交互 ----------------------------- */
-  document.addEventListener('click', e => {
-    const b = e.target.closest('[data-arc-btn]');
-    if (b) {
-      e.preventDefault(); e.stopPropagation();
-      const flag = b.dataset.arcBtn, id = b.dataset.q;
-      if (flag === 'note') arcOpenNote(id); else arcToggle(id, flag);
-      return;
-    }
-    if (e.target.closest('[data-arcclose]')) { arcCloseNote(); return; }
-    if (e.target.id === 'arcNoteSave') {
-      if (arcNoteId) { arcSetNote(arcNoteId, $('#arcNoteText').value); toast('笔记已保存'); }
-      arcCloseNote(); return;
-    }
-    if (e.target.id === 'arcNote') arcCloseNote();
-  });
-  document.addEventListener('input', e => { if (e.target.id === 'arcNoteText') arcNoteInfo(); });
   document.addEventListener('click', e => {
     const g = e.target.closest('[data-goto]');
     if (g) { location.hash = g.dataset.goto; return; }
@@ -2364,7 +2221,6 @@
   $('#sfPapers').textContent = meta.paperCount;
   $('#sfQuestions').textContent = meta.questionCount;
   $('#sfPoints').textContent = meta.officialPointCount;
-  arcSync();
   initDrawer();
   window.addEventListener('hashchange', route);
   route();

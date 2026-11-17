@@ -28,7 +28,6 @@
     <a class="nav-item" data-route="gs"      href="#/map?subject=GS"><span class="ni">∫</span>高等数学</a>
     <a class="nav-item" data-route="la"      href="#/map?subject=LA"><span class="ni">▦</span>线性代数</a>
     <a class="nav-item" data-route="stats"   href="#/stats"><span class="ni">▥</span>统计分析</a>
-    <a class="nav-item" data-route="archive" href="#/archive"><span class="ni">☆</span>学习档案 <span class="nav-num" id="arcCount">0</span></a>
     <a class="nav-item" data-route="syllabus" href="#/syllabus"><span class="ni">☰</span>考纲全文</a>
     <div class="nav-label">数据</div>
     <a class="nav-item" href="assets/cmc-papers.pdf" target="_blank" rel="noopener"><span class="ni">⇱</span>PDF 原件</a>
@@ -83,18 +82,6 @@
 
 <div class="tooltip" id="tooltip" hidden></div>
 <div class="toast" id="toast" hidden></div>
-
-<div class="arc-note" id="arcNote" hidden>
-  <div class="arc-note-box">
-    <div class="arc-note-head"><b id="arcNoteTitle">笔记</b><button type="button" data-arcclose title="关闭">✕</button></div>
-    <textarea id="arcNoteText" rows="6" placeholder="写下你的思路、易错点或复盘…"></textarea>
-    <div class="arc-note-foot"><span class="small muted" id="arcNoteInfo"></span>
-      <button class="btn sm" type="button" data-arcclose>取消</button>
-      <button class="btn sm primary" type="button" id="arcNoteSave">保存</button>
-    </div>
-  </div>
-</div>
-<input type="file" id="arcImport" accept="application/json,.json" hidden>
 
 <script src="assets/js/pdf.min.js"></script>
 <script src="assets/js/katex/katex.min.js"></script>
